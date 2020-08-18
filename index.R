@@ -1,9 +1,10 @@
-PackagesList <- c("readxl", "openxlsx","sjmisc", "tidyverse")
+PackagesList <- c("readxl", "openxlsx","sjmisc", "tidyverse", "glue")
 Packages <- PackagesList[!(PackagesList %in% installed.packages()[,"Package"])]
 if(length(Packages)) install.packages(Packages)
 
 library(readxl)
 library(sjmisc)
+library(glue)
 # library(openxlsx)
 
 # Merge data collection templates 
@@ -22,6 +23,9 @@ library(sjmisc)
 
 #Import data from master file
 import_location <- "HRH Data Collection/HRH Data Collection Template_Country Name.xlsm"
+
+#Output tables path
+output_location <- "OutputTables/"
 # Import PSNU List
 PSNUList <- read_excel(import_location, 
                        sheet = "1. PSNU List")
@@ -60,3 +64,7 @@ AvailableWorkingTime <- read_excel(import_location,
 WeeklyNonClinicalWorkingHours <- read_excel(import_location, 
                                             sheet = "9. Available Working Time", 
                                             range = "B17:C25")
+
+# write csv
+# Number of staff by cadre by PSNU
+write.csv(CurrentHRH, glue('{output_location}NumberOfStaff.csv'), row.names = TRUE)
