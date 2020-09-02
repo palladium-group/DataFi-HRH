@@ -85,11 +85,11 @@ ClientTime <- read_excel("WISNInputs.xlsx",
 names(AvailableWorkingTime) <-
   str_replace_all(names(AvailableWorkingTime), c(" " = "" , "/" = "Per"))
 names(CurrentHRH) <-
-  str_replace_all(names(CurrentHRH), c(" " = "" ,  "-" = "_"))
+  str_replace_all(names(CurrentHRH), c(" " = ""))
 names(CurrentSalaries) <-
   str_replace_all(names(CurrentSalaries), c(" " = ""))
 names(HIVServicesTime) <-
-  str_replace_all(names(HIVServicesTime), c(" " = "" ,  "-" = "_"))
+  str_replace_all(names(HIVServicesTime), c(" " = ""))
 names(ProgramBudgets) <-
   str_replace_all(names(ProgramBudgets), c(" " = "" , "/" = "Or"))
 names(ProgramTargets) <-
@@ -118,6 +118,7 @@ ProgramTargets <- ProgramTargets %>%
     PMTCT_ART,
     TX_PVLS
   )
+
 # Format program targets
 ProgramTargets_PrEP_NEW <-  ProgramTargets %>%
   mutate(ProgramArea = "PrEP_NEW") %>%
@@ -166,6 +167,51 @@ COPProgramTargets <- rbindlist(ProgramTargetsList) %>%
   select(RefID, PSNU, ...1, ProgramArea, ProgramTargets) %>%
   rename(Cadre = ...1)
 
+# Format Current HRH
+CurrentHRH_ClinicalMedical <-  CurrentHRH %>%
+  mutate(Cadre = "Clinical-Medical") %>%
+  select(RefID, PSNU, Cadre, `Clinical-Medical`) %>%
+  rename(CurrentHRH = `Clinical-Medical`)
+CurrentHRH_ClinicalNursing <-  CurrentHRH %>%
+  mutate(Cadre = "Clinical-Nursing") %>%
+  select(RefID, PSNU, Cadre, `Clinical-Nursing`) %>%
+  rename(CurrentHRH = `Clinical-Nursing`)
+CurrentHRH_LayCHW <-  CurrentHRH %>%
+  mutate(Cadre = "Lay-CHW") %>%
+  select(RefID, PSNU, Cadre, `Lay-CHW`) %>%
+  rename(CurrentHRH = `Lay-CHW`)
+CurrentHRH_LayCounselor <-  CurrentHRH %>%
+  mutate(Cadre = "Lay-Counselor") %>%
+  select(RefID, PSNU, Cadre, `Lay-Counselor`) %>%
+  rename(CurrentHRH = `Lay-Counselor`)
+CurrentHRH_CaseManager <-  CurrentHRH %>%
+  mutate(Cadre = "Case Manager") %>%
+  select(RefID, PSNU, Cadre, CaseManager) %>%
+  rename(CurrentHRH = CaseManager)
+CurrentHRH_Pharmacy <-  CurrentHRH %>%
+  mutate(Cadre = "Pharmacy") %>%
+  select(RefID, PSNU, Cadre, Pharmacy) %>%
+  rename(CurrentHRH = Pharmacy)
+CurrentHRH_Laboratory <-  CurrentHRH %>%
+  mutate(Cadre = "Laboratory") %>%
+  select(RefID, PSNU, Cadre, Laboratory) %>%
+  rename(CurrentHRH = Laboratory)
+CurrentHRH_DataClerk <-  CurrentHRH %>%
+  mutate(Cadre = "Data Clerk") %>%
+  select(RefID, PSNU, Cadre, DataClerk) %>%
+  rename(CurrentHRH = DataClerk)
+CurrentHRHList = list(
+  CurrentHRH_ClinicalMedical,
+  CurrentHRH_ClinicalNursing,
+  CurrentHRH_LayCHW,
+  CurrentHRH_LayCounselor,
+  CurrentHRH_CaseManager,
+  CurrentHRH_Pharmacy,
+  CurrentHRH_Laboratory,
+  CurrentHRH_DataClerk
+)
+CurrentHRH_Formated <- rbindlist(CurrentHRHList)
+
 # Available work time
 AvailableWorkingTime <- AvailableWorkingTime %>%
   mutate(
@@ -188,16 +234,26 @@ Data_With_HCW <-
   rename(RefID = RecordID) %>%
   inner_join(COPProgramTargets,
              by = c("RefID", "PSNU", "Cadre", "ProgramArea")) %>%
+  inner_join(CurrentHRH_Formated,
+             by = c("RefID", "PSNU", "Cadre")) %>%
   inner_join(ClientTime,
              by = c("Cadre", "ProgramArea")) %>%
   inner_join(WeeklyNonClinicalWorkingHours,
              by = "Cadre") %>%
+  #calculate Number of visits -- Not accurate -- needs verification
+  mutate(NumberOfVisits = 4) %>%
   #calculate service standard
   mutate(ServiceStandard = 60 / ClientTime) %>%
+  #calculate Annual workload -- Not accurate -- needs verification
+  mutate(AnnualWorkload = ProgramTargets * NumberOfVisits * ServiceStandard) %>%
   mutate(StandardWorkload = ServiceStandard * AWT_Hours) %>%
+  #Category Allowed Standard
   mutate(CategoryAllowedStandard = (
     WeeklyNonClinicalWorkingHours / (WorkingDaysPerWeek * WorkinghrsPerday)
   ) / WorkinghrsPerday) %>%
+  #Category Allowed Factor
+  mutate(CategoryAllowedFactor = 1 / (1 - (CategoryAllowedStandard / AWT_Hours * 100))) %>%
+  mutate(HRHRequirement = (AnnualWorkload / StandardWorkload) * CategoryAllowedFactor) %>%
   select(
     RefID,
     PSNU,
@@ -212,11 +268,15 @@ Data_With_HCW <-
     WeeklyNonClinicalWorkingHours,
     AWT_Days,
     AWT_Hours,
+    NumberOfVisits,
+    AnnualWorkload,
     ServiceStandard,
     StandardWorkload,
-    CategoryAllowedStandard
+    CategoryAllowedStandard,
+    CategoryAllowedFactor,
+    CurrentHRH,
+    HRHRequirement
   )
-
 
 # write output files
 # ====================
