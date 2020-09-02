@@ -33,17 +33,20 @@ PSNUList <- read_excel(import_location,
 # Import Program targets for COP year
 ProgramTargets <- read_excel(import_location,
                              sheet = "2. Program targets for COP year",
-                             skip = 1)
+                             skip = 1,
+                             na = "0")
 # Import PEPFAR Target Attribution
 TargetAttribution <- read_excel(import_location,
-                                sheet = "3. PEPFAR Target Attribution")
+                                sheet = "3. PEPFAR Target Attribution",
+                                na = "0")
 
 TargetAttribution <- rotate_df(TargetAttribution, cn = TRUE)
 colnames(TargetAttribution) <- c("ProgramArea", "TargetAttribution")
 
 # Import HIV Services Time Allocation
 HIVServicesTime <- read_excel(import_location,
-                              sheet = "4. HIV Services Time Allocation")
+                              sheet = "4. HIV Services Time Allocation",
+                              na = "0")
 HIVServicesTime <- rotate_df(HIVServicesTime, cn = TRUE)
 colnames(HIVServicesTime) <- c("Cadre", "HIVServicesTime")
 
@@ -54,11 +57,13 @@ ClientPathways <- rotate_df(ClientPathways, cn = TRUE)
 # Import Current PEPFAR HRH
 CurrentHRH <- read_excel(import_location,
                          sheet = "6. Current PEPFAR HRH",
-                         skip = 1)
+                         skip = 1,
+                         na = "0")
 # Import Current HRH Salaries
 CurrentSalaries <- read_excel(import_location,
                               sheet = "7. Current HRH Salaries",
-                              skip = 1)
+                              skip = 1,
+                              na = "0")
 # Import Program Budgets
 ProgramBudgets <- read_excel(import_location,
                              sheet = "8. Program Budgets", range = "A2:E3")
@@ -278,11 +283,14 @@ Data_With_HCW <-
     HRHRequirement
   )
 
+# Replace N/A with zeros
+Data_With_HCW[is.na(Data_With_HCW)] <- 0
+
 # write output files
 # ====================
-# Number of staff by cadre by PSNU
-write.csv(CurrentHRH,
-          glue('{output_location}NumberOfStaff.csv'),
+# Dashboard one data
+write.csv(Data_With_HCW,
+          glue('{output_location}Data_With_HCW.csv'),
           row.names = TRUE)
 
 # Current HRH salaries
