@@ -1,16 +1,13 @@
 # install packages if not available
 # =================================
 PackagesList <-
-  c(
-    "readxl",
+  c("readxl",
     "openxlsx",
     "sjmisc",
     "tidyverse",
     "glue",
     "stringr",
-    "data.table",
-    "stringi"
-  )
+    "data.table")
 Packages <-
   PackagesList[!(PackagesList %in% installed.packages()[, "Package"])]
 if (length(Packages))
@@ -22,107 +19,98 @@ library(glue)
 library(tidyverse)
 library(stringr)
 library(data.table)
-library(stringi)
-
-#Output tables path
-output_location <- "Output Tables/"
-
-import_location <-
-  "HRH Data Collection/Data Collection Template.xlsm"
 
 #Import data from master file
 # ============================
+import_location <-
+  "HRH Data Collection/HRH Data Collection Template_Country Name.xlsm"
 
+#Output tables path
+output_location <- "Output Tables/"
 # Import PSNU List
-PSNUList <-
-  read_excel(import_location,
-             sheet = "1. PSNU List",
-             skip = 2)
-# Import Program targets
-ProgramTargets <-
-  read_excel(import_location,
-             sheet = "2. Program targets ",
-             na = "0",
-             skip = 3)
-# Import Current PEPFAR HRH
-# ============================
-CurrentHRH <-
-  read_excel(
-    "HRH Data Collection/Data Collection Template.xlsm",
-    sheet = "3. Current PEPFAR HRH ",
-    skip = 3
-  )
-# Import Current HRH Salaries
-CurrentSalaries <-
-  read_excel(import_location,
-             sheet = "4. HRH Salaries",
-             range = "A3:I4")
-# Import customization parameters
-CustomizationParameters <-
-  read_excel(import_location,
-             sheet = "5. Customization parameters",
-             range = "B3:C46")
-CustomizationParameters <-
-  rotate_df(CustomizationParameters, cn = TRUE)
-# Service Standard
-ClientTime <- read_excel("WISNInputs.xlsx",
-                         sheet = "Client Time")
-# Program Areas
-ProgramArea <- read_excel("WISNInputs.xlsx",
-                          sheet = "Program Area")
+PSNUList <- read_excel(import_location,
+                       sheet = "1. PSNU List")
+# Import Program targets for COP year
+ProgramTargets <- read_excel(import_location,
+                             sheet = "2. Program targets for COP year",
+                             skip = 1,
+                             na = "0")
+# Import PEPFAR Target Attribution
+TargetAttribution <- read_excel(import_location,
+                                sheet = "3. PEPFAR Target Attribution",
+                                na = "0")
 
+TargetAttribution <- rotate_df(TargetAttribution, cn = TRUE)
+colnames(TargetAttribution) <- c("ProgramArea", "TargetAttribution")
+
+# Import HIV Services Time Allocation
+HIVServicesTime <- read_excel(import_location,
+                              sheet = "4. HIV Services Time Allocation",
+                              na = "0")
+HIVServicesTime <- rotate_df(HIVServicesTime, cn = TRUE)
+colnames(HIVServicesTime) <- c("Cadre", "HIVServicesTime")
+
+# Import Client Pathways
+ClientPathways <- read_excel(import_location,
+                             sheet = "5. Client Pathways", range = "C1:D76")
+ClientPathways <- rotate_df(ClientPathways, cn = TRUE)
+# Import Current PEPFAR HRH
+CurrentHRH <- read_excel(import_location,
+                         sheet = "6. Current PEPFAR HRH",
+                         skip = 1,
+                         na = "0")
+# Import Current HRH Salaries
+CurrentSalaries <- read_excel(import_location,
+                              sheet = "7. Current HRH Salaries",
+                              skip = 1,
+                              na = "0")
+# Import Program Budgets
+ProgramBudgets <- read_excel(import_location,
+                             sheet = "8. Program Budgets", range = "A2:E3")
 # Available working time
 AvailableWorkingTime <- read_excel(import_location,
                                    sheet = "9. Available Working Time",
                                    range = "B4:I12")
+names(AvailableWorkingTime) <-
+  str_replace_all(names(AvailableWorkingTime), c(" " = "" , "," = "" ,  "/" = "Per"))
 
 # Default non-clinical work hours per week
 WeeklyNonClinicalWorkingHours <- read_excel(import_location,
                                             sheet = "9. Available Working Time",
                                             range = "B17:C25")
+colnames(WeeklyNonClinicalWorkingHours) <-
+  c("Cadre", "WeeklyNonClinicalWorkingHours")
+
+# Service Standard
+ClientTime <- read_excel("WISNInputs.xlsx",
+                         sheet = "Client Time")
 
 # Format data set columns to usable names
 # =======================================
-ProgramTargets <- ProgramTargets %>% filter(!is.na(`PSNU list`))
-colnames(WeeklyNonClinicalWorkingHours) <-
-  c("Cadre", "WeeklyNonClinicalWorkingHours")
 names(AvailableWorkingTime) <-
-  str_replace_all(names(AvailableWorkingTime), c(" " = "" , "," = "" ,  "/" = "Per"))
-names(PSNUList) <- str_replace_all(names(PSNUList), c(" " = ""))
+  str_replace_all(names(AvailableWorkingTime), c(" " = "" , "/" = "Per"))
+names(CurrentHRH) <-
+  str_replace_all(names(CurrentHRH), c(" " = ""))
+names(CurrentSalaries) <-
+  str_replace_all(names(CurrentSalaries), c(" " = ""))
+names(HIVServicesTime) <-
+  str_replace_all(names(HIVServicesTime), c(" " = ""))
+names(ProgramBudgets) <-
+  str_replace_all(names(ProgramBudgets), c(" " = "" , "/" = "Or"))
 names(ProgramTargets) <-
   str_replace_all(names(ProgramTargets), c(" " = ""))
-names(ProgramTargets) <-
-  stri_replace_all_fixed(names(ProgramTargets), "(Total)", "")
-CurrentHRH <- CurrentHRH %>%
-  rename(RefID = ...1, PSNU = ...2)
-PSNUList <- PSNUList %>% filter(!is.na(PSNU))
-# Calculations
+names(PSNUList) <- str_replace_all(names(PSNUList), c(" " = ""))
+names(TargetAttribution) <-
+  str_replace_all(names(TargetAttribution), c(" " = ""))
+names(WeeklyNonClinicalWorkingHours) <-
+  str_replace_all(names(WeeklyNonClinicalWorkingHours), c(" " = ""))
+
+# Output Calculations
 # ====================
 
-# Available work time
-# -------------------
-AvailableWorkingTime <- AvailableWorkingTime %>%
-  mutate(
-    AWT_Days = (WorkingDaysPerWeek * 52) -
-      (AnnualLeave + PublicHolidays + SickLeave + TrainingDaysperYear)
-  ) %>%
-  mutate(AWT_Hours = AWT_Days * WorkinghrsPerday) %>%
-  rename(Cadre = ...1) %>%
-  select(Cadre,
-         WorkingDaysPerWeek,
-         WorkinghrsPerday,
-         AWT_Days,
-         AWT_Hours)
-
-# Program Targets
-# ----------------
-# Select
+# select the program Targets
 ProgramTargets <- ProgramTargets %>%
-  rename(TX_CURR = `TX_CURR `) %>%
   rename(PSNU = PSNUlist) %>%
-  mutate(
-    HTS_TST = `HTS_TST(Mobile)` + `HTS_TST(IndexMod)` + `HTS_TST(FacilityIndex)` + `HTS_TST(PMTCT_ANC1)` + `HTS_TST(PMTCT_PostANC1)` + `HTS_TST(STI)` + `HTS_TST(OtherPITC)` + `HTS_TST(Inpatient)`
-  ) %>%
   select(
     RefID,
     PSNU,
@@ -135,7 +123,8 @@ ProgramTargets <- ProgramTargets %>%
     PMTCT_ART,
     TX_PVLS
   )
-# Format
+
+# Format program targets
 ProgramTargets_PrEP_NEW <-  ProgramTargets %>%
   mutate(ProgramArea = "PrEP_NEW") %>%
   select(RefID, PSNU, ProgramArea, PrEP_NEW) %>%
@@ -180,43 +169,42 @@ ProgramTargetsList = list(
 )
 COPProgramTargets <- rbindlist(ProgramTargetsList) %>%
   full_join(AvailableWorkingTime, by = character()) %>%
-  select(RefID, PSNU, Cadre, ProgramArea, ProgramTargets)
+  select(RefID, PSNU, ...1, ProgramArea, ProgramTargets) %>%
+  rename(Cadre = ...1)
 
-# Current HRH
-# -----------
-# Format
+# Format Current HRH
 CurrentHRH_ClinicalMedical <-  CurrentHRH %>%
   mutate(Cadre = "Clinical-Medical") %>%
-  select(RefID, PSNU, Cadre, `Total...3`) %>%
-  rename(CurrentHRH = `Total...3`)
+  select(RefID, PSNU, Cadre, `Clinical-Medical`) %>%
+  rename(CurrentHRH = `Clinical-Medical`)
 CurrentHRH_ClinicalNursing <-  CurrentHRH %>%
   mutate(Cadre = "Clinical-Nursing") %>%
-  select(RefID, PSNU, Cadre, `Total...10`) %>%
-  rename(CurrentHRH = `Total...10`)
+  select(RefID, PSNU, Cadre, `Clinical-Nursing`) %>%
+  rename(CurrentHRH = `Clinical-Nursing`)
 CurrentHRH_LayCHW <-  CurrentHRH %>%
   mutate(Cadre = "Lay-CHW") %>%
-  select(RefID, PSNU, Cadre, `Total...26`) %>%
-  rename(CurrentHRH = `Total...26`)
+  select(RefID, PSNU, Cadre, `Lay-CHW`) %>%
+  rename(CurrentHRH = `Lay-CHW`)
 CurrentHRH_LayCounselor <-  CurrentHRH %>%
   mutate(Cadre = "Lay-Counselor") %>%
-  select(RefID, PSNU, Cadre, `Total...19`) %>%
-  rename(CurrentHRH = `Total...19`)
+  select(RefID, PSNU, Cadre, `Lay-Counselor`) %>%
+  rename(CurrentHRH = `Lay-Counselor`)
 CurrentHRH_CaseManager <-  CurrentHRH %>%
   mutate(Cadre = "Case Manager") %>%
-  select(RefID, PSNU, Cadre, `Total...33`) %>%
-  rename(CurrentHRH = `Total...33`)
+  select(RefID, PSNU, Cadre, CaseManager) %>%
+  rename(CurrentHRH = CaseManager)
 CurrentHRH_Pharmacy <-  CurrentHRH %>%
   mutate(Cadre = "Pharmacy") %>%
-  select(RefID, PSNU, Cadre, `Total...38`) %>%
-  rename(CurrentHRH = `Total...38`)
+  select(RefID, PSNU, Cadre, Pharmacy) %>%
+  rename(CurrentHRH = Pharmacy)
 CurrentHRH_Laboratory <-  CurrentHRH %>%
   mutate(Cadre = "Laboratory") %>%
-  select(RefID, PSNU, Cadre, `Total...43`) %>%
-  rename(CurrentHRH = `Total...43`)
+  select(RefID, PSNU, Cadre, Laboratory) %>%
+  rename(CurrentHRH = Laboratory)
 CurrentHRH_DataClerk <-  CurrentHRH %>%
   mutate(Cadre = "Data Clerk") %>%
-  select(RefID, PSNU, Cadre, `Total...48`) %>%
-  rename(CurrentHRH = `Total...48`)
+  select(RefID, PSNU, Cadre, DataClerk) %>%
+  rename(CurrentHRH = DataClerk)
 CurrentHRHList = list(
   CurrentHRH_ClinicalMedical,
   CurrentHRH_ClinicalNursing,
@@ -229,10 +217,25 @@ CurrentHRHList = list(
 )
 CurrentHRH_Formated <- rbindlist(CurrentHRHList)
 
+# Available work time
+AvailableWorkingTime <- AvailableWorkingTime %>%
+  mutate(
+    AWT_Days = (WorkingDaysPerWeek * 52) -
+      (AnnualLeave + PublicHolidays + SickLeave + TrainingDaysperYear)
+  ) %>%
+  mutate(AWT_Hours = AWT_Days * WorkinghrsPerday) %>%
+  rename(Cadre = ...1) %>%
+  select(Cadre,
+         WorkingDaysPerWeek,
+         WorkinghrsPerday,
+         AWT_Days,
+         AWT_Hours)
+
 #Dashboard one data
 Data_With_HCW <-
   full_join(PSNUList, AvailableWorkingTime, by = character()) %>%
-  full_join(ProgramArea, by = character()) %>%
+  full_join(TargetAttribution, by = character()) %>%
+  inner_join(HIVServicesTime, by = "Cadre") %>%
   rename(RefID = RecordID) %>%
   inner_join(COPProgramTargets,
              by = c("RefID", "PSNU", "Cadre", "ProgramArea")) %>%
@@ -262,6 +265,8 @@ Data_With_HCW <-
     Cadre,
     ProgramArea,
     ProgramTargets,
+    TargetAttribution,
+    HIVServicesTime,
     ClientTime,
     WorkingDaysPerWeek,
     WorkinghrsPerday,
@@ -286,4 +291,9 @@ Data_With_HCW[is.na(Data_With_HCW)] <- 0
 # Dashboard one data
 write.csv(Data_With_HCW,
           glue('{output_location}Data_With_HCW.csv'),
+          row.names = TRUE)
+
+# Current HRH salaries
+write.csv(CurrentSalaries,
+          glue('{output_location}CurrentHRHSalaries.csv'),
           row.names = TRUE)
