@@ -27,10 +27,11 @@ library(stringi)
 #Output tables path
 output_location <- "Output Tables/"
 
+# Import Location
 import_location <-
   "HRH Data Collection/Data Collection Template.xlsm"
 
-#Import data from master file
+#Import data from DCT
 # ============================
 
 # Import PSNU List
@@ -47,16 +48,20 @@ ProgramTargets <-
 # Import Current PEPFAR HRH
 # ============================
 CurrentHRH <-
-  read_excel(
-    "HRH Data Collection/Data Collection Template.xlsm",
-    sheet = "3. Current PEPFAR HRH ",
-    skip = 3
-  )
+  read_excel(import_location,
+             sheet = "3. Current PEPFAR HRH ",
+             skip = 3)
 # Import Current HRH Salaries
 CurrentSalaries <-
   read_excel(import_location,
              sheet = "4. HRH Salaries",
-             range = "A3:I4")
+             range = "A2:I4")
+colnames(CurrentSalaries) <-
+  c("0", "1", "2", "3", "4", "5", "6", "7", "8")
+CurrentSalaries <- rotate_df(CurrentSalaries, cn = TRUE)
+colnames(CurrentSalaries) <-
+  c("Cadre", "CurrentSalaries")
+CurrentSalaries[is.na(CurrentSalaries)] <- 0
 # Import customization parameters
 CustomizationParameters <-
   read_excel(import_location,
@@ -65,12 +70,11 @@ CustomizationParameters <-
 CustomizationParameters <-
   rotate_df(CustomizationParameters, cn = TRUE)
 # Service Standard
-ClientTime <- read_excel("WISNInputs.xlsx",
+ClientTime <- read_excel(import_location,
                          sheet = "Client Time")
 # Program Areas
-ProgramArea <- read_excel("WISNInputs.xlsx",
+ProgramArea <- read_excel("ProgramAreas.xlsx",
                           sheet = "Program Area")
-
 # Available working time
 AvailableWorkingTime <- read_excel(import_location,
                                    sheet = "9. Available Working Time",
@@ -96,6 +100,8 @@ names(ProgramTargets) <-
 CurrentHRH <- CurrentHRH %>%
   rename(RefID = ...1, PSNU = ...2)
 PSNUList <- PSNUList %>% filter(!is.na(PSNU))
+CurrentHRH <- CurrentHRH %>% filter(!is.na(RefID))
+CurrentHRH <- CurrentHRH %>% filter(!is.na(PSNU))
 # Calculations
 # ====================
 
@@ -228,8 +234,9 @@ CurrentHRHList = list(
   CurrentHRH_DataClerk
 )
 CurrentHRH_Formated <- rbindlist(CurrentHRHList)
+CurrentHRH_Formated[is.na(CurrentHRH_Formated)] <- 0
 
-#Dashboard one data
+# Dashboard one data
 Data_With_HCW <-
   full_join(PSNUList, AvailableWorkingTime, by = character()) %>%
   full_join(ProgramArea, by = character()) %>%
@@ -242,8 +249,21 @@ Data_With_HCW <-
              by = c("Cadre", "ProgramArea")) %>%
   inner_join(WeeklyNonClinicalWorkingHours,
              by = "Cadre") %>%
+  inner_join(CurrentSalaries,
+             by = "Cadre") %>%
   #calculate Number of visits -- Not accurate -- needs verification
-  mutate(NumberOfVisits = 4) %>%
+  mutate(
+    NumberOfVisits = case_when(
+      ProgramArea == "PrEP_NEW" ~ 1,
+      ProgramArea == "PrEP_CURR" ~ 4,
+      ProgramArea == "HTS_SELF" ~ 1,
+      ProgramArea == "HTS_TST" ~ 1,
+      ProgramArea == "TX_NEW" ~ 1,
+      ProgramArea == "TX_CURR" ~ 12,
+      ProgramArea == "PMTCT_ART" ~ 4,
+      ProgramArea == "TX_PVLS" ~ 2
+    )
+  ) %>%
   #calculate service standard
   mutate(ServiceStandard = 60 / ClientTime) %>%
   #calculate Annual workload -- Not accurate -- needs verification
@@ -256,11 +276,14 @@ Data_With_HCW <-
   #Category Allowed Factor
   mutate(CategoryAllowedFactor = 1 / (1 - (CategoryAllowedStandard / AWT_Hours * 100))) %>%
   mutate(HRHRequirement = (AnnualWorkload / StandardWorkload) * CategoryAllowedFactor) %>%
+  mutate(Country = OperatingUnit) %>%
   select(
     RefID,
+    Country,
     PSNU,
     Cadre,
     ProgramArea,
+    CurrentSalaries,
     ProgramTargets,
     ClientTime,
     WorkingDaysPerWeek,
@@ -281,9 +304,34 @@ Data_With_HCW <-
 # Replace N/A with zeros
 Data_With_HCW[is.na(Data_With_HCW)] <- 0
 
+HRHData <- Data_With_HCW %>%
+  mutate(`Gap - Staffing` = (HRHRequirement - CurrentHRH)) %>%
+  mutate(`Need - Costing` = (HRHRequirement * as.numeric(CurrentSalaries))) %>%
+  mutate(`Gap - Costing` = ((HRHRequirement - CurrentHRH) * as.numeric(CurrentSalaries))) %>%
+  mutate(`Existing - Costing` = CurrentHRH - as.numeric(CurrentSalaries)) %>%
+  mutate(`%Shortage` = HRHRequirement - CurrentHRH) %>%
+  mutate(`%Allocated` = HRHRequirement - CurrentHRH) %>%
+  mutate(`Existing FTEs` = CurrentHRH) %>%
+  mutate(`HCW Need` = HRHRequirement) %>%
+  select(
+    Country,
+    PSNU,
+    ProgramArea,
+    Cadre,
+    `Existing FTEs`,
+    `HCW Need`,
+    `Gap - Staffing`,
+    `Need - Costing`,
+    `Gap - Costing`,
+    `%Shortage`,
+    `Existing - Costing`,
+    `%Allocated`
+  )
+
 # write output files
 # ====================
+
 # Dashboard one data
-write.csv(Data_With_HCW,
-          glue('{output_location}Data_With_HCW.csv'),
+write.csv(HRHData,
+          glue('{output_location}HRHData.csv'),
           row.names = TRUE)
