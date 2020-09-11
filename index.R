@@ -259,13 +259,13 @@ Data_With_HCW <-
       ProgramArea == "HTS_SELF" ~ 1,
       ProgramArea == "HTS_TST" ~ 1,
       ProgramArea == "TX_NEW" ~ 1,
-      ProgramArea == "TX_CURR" ~ 12,
+      ProgramArea == "TX_CURR" ~ 2,
       ProgramArea == "PMTCT_ART" ~ 4,
       ProgramArea == "TX_PVLS" ~ 2
     )
   ) %>%
   #calculate service standard
-  mutate(ServiceStandard = 60 / ClientTime) %>%
+  mutate(ServiceStandard = ifelse(ClientTime > 0, 60 / ClientTime, 0)) %>%
   #calculate Annual workload -- Not accurate -- needs verification
   mutate(AnnualWorkload = ProgramTargets * NumberOfVisits * ServiceStandard) %>%
   mutate(StandardWorkload = ServiceStandard * AWT_Hours) %>%
