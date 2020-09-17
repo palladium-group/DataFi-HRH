@@ -29,7 +29,7 @@ output_location <- "Output Tables/"
 
 # Import Location
 import_location <-
-  "HRH Data Collection/Data Collection Template.xlsm"
+  "HRH Data Collection/Data Collection Template TZ.xlsm"
 
 #Import data from DCT
 # ============================
@@ -251,23 +251,10 @@ Data_With_HCW <-
              by = "Cadre") %>%
   inner_join(CurrentSalaries,
              by = "Cadre") %>%
-  #calculate Number of visits -- Not accurate -- needs verification
-  mutate(
-    NumberOfVisits = case_when(
-      ProgramArea == "PrEP_NEW" ~ 1,
-      ProgramArea == "PrEP_CURR" ~ 4,
-      ProgramArea == "HTS_SELF" ~ 1,
-      ProgramArea == "HTS_TST" ~ 1,
-      ProgramArea == "TX_NEW" ~ 1,
-      ProgramArea == "TX_CURR" ~ 2,
-      ProgramArea == "PMTCT_ART" ~ 4,
-      ProgramArea == "TX_PVLS" ~ 2
-    )
-  ) %>%
   #calculate service standard
   mutate(ServiceStandard = ifelse(ClientTime > 0, 60 / ClientTime, 0)) %>%
-  #calculate Annual workload -- Not accurate -- needs verification
-  mutate(AnnualWorkload = ProgramTargets * NumberOfVisits * ServiceStandard) %>%
+  #calculate Annual workload
+  mutate(AnnualWorkload = ProgramTargets * ServiceStandard) %>%
   mutate(StandardWorkload = ServiceStandard * AWT_Hours) %>%
   #Category Allowed Standard
   mutate(CategoryAllowedStandard = (
@@ -277,29 +264,31 @@ Data_With_HCW <-
   mutate(CategoryAllowedFactor = 1 / (1 - (CategoryAllowedStandard / AWT_Hours * 100))) %>%
   mutate(HRHRequirement = (AnnualWorkload / StandardWorkload) * CategoryAllowedFactor) %>%
   mutate(Country = OperatingUnit) %>%
-  select(
-    RefID,
-    Country,
-    PSNU,
-    Cadre,
-    ProgramArea,
-    CurrentSalaries,
-    ProgramTargets,
-    ClientTime,
-    WorkingDaysPerWeek,
-    WorkinghrsPerday,
-    WeeklyNonClinicalWorkingHours,
-    AWT_Days,
-    AWT_Hours,
-    NumberOfVisits,
-    AnnualWorkload,
-    ServiceStandard,
-    StandardWorkload,
-    CategoryAllowedStandard,
-    CategoryAllowedFactor,
-    CurrentHRH,
-    HRHRequirement
-  )
+  # Assumption that the current HRH are equally distributed amongst the different program areas
+  mutate(CurrentHRH = CurrentHRH / 8)
+select(
+  RefID,
+  Country,
+  PSNU,
+  Cadre,
+  ProgramArea,
+  CurrentSalaries,
+  ProgramTargets,
+  ClientTime,
+  WorkingDaysPerWeek,
+  WorkinghrsPerday,
+  WeeklyNonClinicalWorkingHours,
+  AWT_Days,
+  AWT_Hours,
+  AnnualWorkload,
+  ServiceStandard,
+  StandardWorkload,
+  CategoryAllowedStandard,
+  CategoryAllowedFactor,
+  CurrentHRH,
+  HRHRequirement
+)
+
 
 # Replace N/A with zeros
 Data_With_HCW[is.na(Data_With_HCW)] <- 0
@@ -327,6 +316,36 @@ HRHData <- Data_With_HCW %>%
     `Existing - Costing`,
     `%Allocated`
   )
+# Prioritization ranking
+PRI_List <- HRHData %>%
+  # defaults to zero as this is missing from the DCT
+  mutate(`Newly Assigned Staff` = 0) %>%
+  select(Country,
+         PSNU,
+         Cadre,
+         `Existing FTEs`,
+         `HCW Need`,
+         `Newly Assigned Staff`) %>%
+  group_by(Country,
+           PSNU,
+           Cadre) %>%
+  summarise_each(funs(sum)) %>%
+  # PRI 0 when there is a surplus and 99999 where there are no existing staff
+  mutate(PRI = case_when(
+    `Existing FTEs` > `HCW Need` ~ 0,
+    `Existing FTEs` == 0  ~ 99999,
+    TRUE ~ (`HCW Need` - (`Existing FTEs` + `Newly Assigned Staff`)) /
+      ((`Existing FTEs` + `Newly Assigned Staff`) * 100)
+  )) %>%
+  mutate(PRI = round(PRI, digits = 4))
+
+PRI_Ranking <- PRI_List %>%
+  select(PRI,
+         Cadre,
+         PSNU,
+         Country) %>%
+  arrange(desc(PRI))
+
 
 # write output files
 # ====================
@@ -334,4 +353,12 @@ HRHData <- Data_With_HCW %>%
 # Dashboard one data
 write.csv(HRHData,
           glue('{output_location}HRHData.csv'),
+          row.names = TRUE)
+# PRI List
+write.csv(PRI_List,
+          glue('{output_location}PRI_List.csv'),
+          row.names = TRUE)
+# PRI Ranking
+write.csv(PRI_Ranking,
+          glue('{output_location}PRI_Ranking.csv'),
           row.names = TRUE)
