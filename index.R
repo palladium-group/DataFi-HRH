@@ -29,7 +29,7 @@ output_location <- "Output Tables/"
 
 # Import Location
 import_location <-
-  "HRH Data Collection/Data Collection Template TZ.xlsm"
+  "HRH Data Collection/Data Collection Template.xlsm"
 
 #Import data from DCT
 # ============================
@@ -55,10 +55,8 @@ CurrentHRH <-
 CurrentSalaries <-
   read_excel(import_location,
              sheet = "4. HRH Salaries",
-             range = "A2:I4")
-colnames(CurrentSalaries) <-
-  c("0", "1", "2", "3", "4", "5", "6", "7", "8")
-CurrentSalaries <- rotate_df(CurrentSalaries, cn = TRUE)
+             range = "A5:B13")
+
 colnames(CurrentSalaries) <-
   c("Cadre", "CurrentSalaries")
 CurrentSalaries[is.na(CurrentSalaries)] <- 0
@@ -70,8 +68,8 @@ CustomizationParameters <-
 CustomizationParameters <-
   rotate_df(CustomizationParameters, cn = TRUE)
 # Service Standard
-ClientTime <- read_excel(import_location,
-                         sheet = "Client Time")
+ClientTime <- read_excel(import_location, 
+                            sheet = "Client Time", range = "A1:K65")
 # Program Areas
 ProgramArea <- read_excel("ProgramAreas.xlsx",
                           sheet = "Program Area")
@@ -265,7 +263,7 @@ Data_With_HCW <-
   mutate(HRHRequirement = (AnnualWorkload / StandardWorkload) * CategoryAllowedFactor) %>%
   mutate(Country = OperatingUnit) %>%
   # Assumption that the current HRH are equally distributed amongst the different program areas
-  mutate(CurrentHRH = CurrentHRH / 8)
+  mutate(CurrentHRH = CurrentHRH / 8) %>%
 select(
   RefID,
   Country,
