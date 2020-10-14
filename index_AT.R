@@ -58,8 +58,8 @@ tot_mins <- ddply(programTargets, .(PSNU),
               # no of clients served
               # 5. What percentage of people who start PrEP in the upcoming COP year will likely start PrEP in a 
               #    health facility (vs. community)? 
-              clients_served_fac <- prep_new_target*customPar$qn[5]        # facility
-              clients_served_com <- prep_new_target*(1-customPar$qn[5])    # community
+              clients_served_fac <- customPar$qn[5]        # facility
+              clients_served_com <- 1-customPar$qn[5]    # community
               
               # total no. of visits annually
               tot_visits_fac <- clients_served_fac*1       # Facility
@@ -69,32 +69,31 @@ tot_mins <- ddply(programTargets, .(PSNU),
               tot_mins <- list( 
                 # 1. Are there case managers in place for follow-up of PrEP_NEW clients? 
                 # 14. How many clients would you expect to need to screen to get to the total PrEP_NEW target?
-                'Case Manager', tot_visits_fac*(15*customPar$qn[14]*100/prep_new_target + ifelse(customPar$resp[1], 10*1, 0)) +
-                tot_visits_com*(15*customPar$qn[14]*100/prep_new_target + ifelse(customPar$resp[1], 10*1, 0)),
+                'Case Manager', tot_visits_fac*(ifelse(prep_new_target==0, 0, 15*customPar$qn[14]*100/prep_new_target) + 
+                                                ifelse(customPar$resp[1], 10*1, 0)) +
+                tot_visits_com*(ifelse(prep_new_target==0, 0, 15*customPar$qn[14]*100/prep_new_target) + 
+                                ifelse(customPar$resp[1], 10*1, 0)),
                 'Clinical-Medical', tot_visits_fac*20*1 + 0,
                 'Clinical-Nursing', 0 + tot_visits_com*25*1,
                 'Data Clerk', tot_visits_fac*(10*1 + 10*1) + tot_visits_com*(10*1 + 10*1), 
                 'Laboratory', tot_visits_fac*20*1 + tot_visits_com*20*1,
                 'Lay-CHW', 0 + 0,
-                'Lay-Counselor', tot_visits_fac*20*customPar$qn[14]*100/prep_new_target + 
-                tot_visits_com*20*customPar$qn[14]*100/prep_new_target,
+                'Lay-Counselor', ifelse(prep_new_target==0, 0, tot_visits_fac*20*customPar$qn[14]*100/prep_new_target) + 
+                                 ifelse(prep_new_target==0, 0, tot_visits_com*20*customPar$qn[14]*100/prep_new_target),
                 'Pharmacy', tot_visits_fac*15*1 + 0)
               
               TOT_MINS[[1]] <- data.frame(indicator='PrEP_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
               # [2] PrEP_CURR
-              # COP targets for PrEP_CURR rolling over on PrEP from previous COP year
-              target <- x$cop_target[x$pathway=='PrEP_CURR_Total'] - prep_new_target
-              
               # no of clients served
               # 6. What percentage of people who start PrEP in the upcoming COP year will likely continue 
               #    PrEP from a health facility (vs. community)?
               # 7. What percentage of people who started PrEP in the current COP year will likely continue 
               #    PrEP from a health facility (vs. community)?
-              clients_served_fac_start <- prep_new_target*customPar$qn[6]        # starting PrEP served at facility
-              clients_served_com_start <- prep_new_target*(1-customPar$qn[6])    # starting PrEP served at community
-              clients_served_fac_roll <- target*customPar$qn[7]          # rolling over PrEP served at facility
-              clients_served_com_roll <- target*(1-customPar$qn[7])      # rolling over PrEP served at community
+              clients_served_fac_start <- customPar$qn[6]        # starting PrEP served at facility
+              clients_served_com_start <- 1-customPar$qn[6]    # starting PrEP served at community
+              clients_served_fac_roll <- customPar$qn[7]          # rolling over PrEP served at facility
+              clients_served_com_roll <- 1-customPar$qn[7]      # rolling over PrEP served at community
               
               # adjusted no. of visits per client
               # 15. How many follow up visits, on average, will people who start PrEP in the upcoming COP year likely have?
@@ -127,14 +126,12 @@ tot_mins <- ddply(programTargets, .(PSNU),
               
               ########### HTS
               # [3] HTS_SELF (Total)
-              target <- x$cop_target[x$pathway=='HTS_SELF_Total']        # COP target
-              
               # no of clients served
               # 19. What percentage of HTS_SELF are unassisted (vs. assisted)?
-              clients_served_unass <- target*customPar$qn[19]        # unassisted
+              clients_served_unass <- customPar$qn[19]        # unassisted
               # 8. What percentage of assisted HTS_SELF are seen at a facility (vs. community)? 
-              clients_served_fac <- target*(1-customPar$qn[19])*customPar$qn[8]      # assisted facility
-              clients_served_com <- target*(1-customPar$qn[19])*(1-customPar$qn[8])    # assisted community
+              clients_served_fac <- (1-customPar$qn[19])*customPar$qn[8]      # assisted facility
+              clients_served_com <- (1-customPar$qn[19])*(1-customPar$qn[8])    # assisted community
               
               # total no. of visits annually
               tot_visits_unass <- clients_served_unass*1       # unassisted
@@ -150,41 +147,38 @@ tot_mins <- ddply(programTargets, .(PSNU),
                 'Laboratory', 0 + 0 + 0,
                 # 20. What percentage of assisted HTS_SELF  are seen at a facility by a Lay-Counselor (vs. Lay-CHW)?
                 # 21. What percentage of unassisted HTS_SELF  are seen by a Lay-Counselor (vs. Lay-CHW):
-                'Lay-CHW', tot_visits_unass*2*customPar$qn[21] + tot_visits_fac*(10*customPar$qn[20] + 10*0.05) + 
-                tot_visits_com*(20*1 + 15*0.05),
-                'Lay-Counselor', tot_visits_unass*2*(1 - customPar$qn[21]) + 
-                  tot_visits_fac*(10*(1 - customPar$qn[20]) + 10*0.05) + 0,
+                'Lay-CHW', tot_visits_unass*2*customPar$qn[21] +       # unassisted
+                           tot_visits_fac*(10*customPar$qn[20] + 10*0.05) +    # assisted facility
+                           tot_visits_com*(20*1 + 15*0.05),    # assisted community
+                'Lay-Counselor', tot_visits_unass*2*(1 - customPar$qn[21]) +  # unassisted
+                           tot_visits_fac*(10*(1 - customPar$qn[20]) + 10*0.05) + 0,      # assisted facility
                 'Pharmacy', 0 + 0 + 0)
               
               TOT_MINS[[3]] <- data.frame(indicator='HTS_SELF', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               # [4] HTS_TST_Mobile
-              target <- x$cop_target[x$pathway=='HTS_TST_Mobile']      # COP target
-              
               # Total no. of minutes
               tot_mins <- list( 
                 'Case Manager', 0,
                 'Clinical-Medical', 0,
                 'Clinical-Nursing', 0,
-                'Data Clerk', target*10*0.8, 
-                'Laboratory', target*30*1, 
+                'Data Clerk', 10*0.8, 
+                'Laboratory', 30*1, 
                 'Lay-CHW', 0, 
-                'Lay-Counselor', target*55*1, 
+                'Lay-Counselor', 55*1, 
                 'Pharmacy', 0)
               
               TOT_MINS[[4]] <- data.frame(indicator='HTS_TST', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               # Total no. of minutes
               htsTime <- function(pathway) {
-                target <- x$cop_target[x$pathway==pathway]    # COP target
-                
                 tot_mins <- list( 
                   # 3.  Can Case Managers provide testing? 
-                  'Case Manager', target*(10 + ifelse(customPar$resp[3], 30*1, 0)),
+                  'Case Manager', 10 + ifelse(customPar$resp[3], 30*1, 0),
                   'Clinical-Medical', 0,
-                  'Clinical-Nursing', target*(30*0.9),
-                  'Data Clerk', target*10*1, 
-                  'Laboratory', target*(0 + 30*0.1),
+                  'Clinical-Nursing', 30*0.9,
+                  'Data Clerk', 10*1, 
+                  'Laboratory', 0 + 30*0.1,
                   'Lay-CHW', 0, 
                   'Lay-Counselor', 0,
                   'Pharmacy', 0)
@@ -200,33 +194,26 @@ tot_mins <- ddply(programTargets, .(PSNU),
               TOT_MINS[[10]] <- htsTime('HTS_TST_Inpatient')          # [10] HTS_TST_Inpatient
               
               # [11] HTS_TST_IndexMod
-              target <- x$cop_target[x$pathway=='HTS_TST_IndexMod'] # COP targets
-              
               # Total no. of minutes
               tot_mins <- list( 
                 # 4.  Can Lay-Counselors provide testing? 
                 'Case Manager', 0,
-                'Clinical-Medical', target*(ifelse(customPar$resp[4], 0, 60*0.9)),
-                'Clinical-Nursing', target*(ifelse(customPar$resp[4], 0, 60*0.05)),
-                'Data Clerk', target*(10*1), 
-                'Laboratory', target*(ifelse(customPar$resp[4], 0, 60*0.05)),
-                'Lay-CHW', target*(ifelse(customPar$resp[4], 0, 60*1)), 
-                'Lay-Counselor', target*(ifelse(customPar$resp[4], 125*1, 0)),
+                'Clinical-Medical', ifelse(customPar$resp[4], 0, 60*0.9),
+                'Clinical-Nursing', ifelse(customPar$resp[4], 0, 60*0.05),
+                'Data Clerk', 10*1, 
+                'Laboratory', ifelse(customPar$resp[4], 0, 60*0.05),
+                'Lay-CHW', ifelse(customPar$resp[4], 0, 60*1), 
+                'Lay-Counselor', ifelse(customPar$resp[4], 125*1, 0),
                 'Pharmacy', 0)
               
               TOT_MINS[[11]] <- data.frame(indicator='HTS_TST', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               ########### TX 
               # [12] TX_NEW General Patients 
-              tx_new_total_target <- x$cop_target[x$pathway=='TX_NEW_Total']     # COP target
-              tx_new_kp_target <- x$cop_target[x$pathway=='TX_NEW_KP']     # COP target
-              tx_new_pmtct_new_target <- x$cop_target[x$pathway=='PMTCT_ART_New_on_life-long_ART']     # COP target
-              tx_new_target <- tx_new_total_target - tx_new_kp_target - tx_new_pmtct_new_target
-              
               # no of clients served
               # 9. What percentage of TX_NEW: general population are seen at a facility (vs. community)? 
-              clients_served_fac <- tx_new_target*customPar$qn[9]        # facility
-              clients_served_com <- tx_new_target*(1-customPar$qn[9])    # community
+              clients_served_fac <- customPar$qn[9]        # facility
+              clients_served_com <- 1-customPar$qn[9]    # community
               
               # total no. of visits annually
               tot_visits_fac <- clients_served_fac*1       # Facility
@@ -249,8 +236,8 @@ tot_mins <- ddply(programTargets, .(PSNU),
               # [13] TX_NEW_KP 
               # no of clients served
               # 10.  What percentage of TX_NEW: KP are seen at a facility (vs. community? 
-              clients_served_fac <- tx_new_kp_target*customPar$qn[10]        # facility
-              clients_served_com <- tx_new_kp_target*(1-customPar$qn[10])    # community
+              clients_served_fac <- customPar$qn[10]        # facility
+              clients_served_com <- 1-customPar$qn[10]    # community
               
               # total no. of visits annually
               tot_visits_fac <- clients_served_fac*1       # Facility
@@ -265,7 +252,7 @@ tot_mins <- ddply(programTargets, .(PSNU),
                 'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
                 'Laboratory', tot_visits_fac*30*1 + tot_visits_com*30*1,
                 'Lay-CHW', 0 + 0,
-                'Lay-Counselor', 0 + 0,
+                'Lay-Counselor', 120*1.72,
                 'Pharmacy', tot_visits_fac*ifelse(customPar$resp[25], 0, 15*1) + tot_visits_com*15*1)
               
               TOT_MINS[[13]] <- data.frame(indicator='TX_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
@@ -273,11 +260,11 @@ tot_mins <- ddply(programTargets, .(PSNU),
               # [14] PMTCT_ART_New_on_life-long_ART 
               # Total no. of minutes
               tot_mins <- list( 
-                'Case Manager', tx_new_pmtct_new_target*40*1, 
+                'Case Manager', 40*1, 
                 'Clinical-Medical', 0,
-                'Clinical-Nursing', tx_new_pmtct_new_target*30*1,
-                'Data Clerk', tx_new_pmtct_new_target*25*1, 
-                'Laboratory', tx_new_pmtct_new_target*30*1,
+                'Clinical-Nursing', 30*1,
+                'Data Clerk', 25*1, 
+                'Laboratory', 30*1,
                 'Lay-CHW', 0,
                 'Lay-Counselor', 0,
                 'Pharmacy', 0)
@@ -285,15 +272,10 @@ tot_mins <- ddply(programTargets, .(PSNU),
               TOT_MINS[[14]] <- data.frame(indicator='TX_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               # [15] TX_CURR General Patients: Drug Dispensing Frequency & Clinical Consultations
-              tx_curr_total_target <- x$cop_target[x$pathway=='TX_CURR_Total']     # COP target
-              tx_curr_kp_target <- x$cop_target[x$pathway=='TX_CURR_KP']     # COP target
-              tx_curr_pmtct_already_target <- x$cop_target[x$pathway=='PMTCT_ART_Already_on_life-long_ART_at_the_beginning_of_current_pregnancy']     # COP target
-              target <- tx_curr_total_target - tx_curr_kp_target - tx_curr_pmtct_already_target
-              
               # no of clients served
               # 11.  What percentage of TX_CURR: general population are seen at a facility (vs. community)? 
-              clients_served_fac <- target*customPar$qn[11]        # facility
-              clients_served_com <- target*(1-customPar$qn[11])    # community
+              clients_served_fac <- customPar$qn[11]        # facility
+              clients_served_com <- 1-customPar$qn[11]    # community
               
               # total no. of visits annually
               tot_visits_fac <- clients_served_fac*1       # Facility
@@ -416,26 +398,23 @@ tot_mins <- ddply(programTargets, .(PSNU),
                 #     seen at a facility are traced to their home due to missed appointments? 
                 # 33. What percentage of PMTCT_ ART Already on Life-long ART at the beginning of the current pregnancy are 
                 #     unstable and have monthly visits to a facility (vs. those who are stable and have quarterly visits)? 
-                'Case Manager', tx_curr_pmtct_already_target*((
+                'Case Manager', (
                                      30*1 + 
                                      ifelse(customPar$response[40]=='Lay-CHW', 0, 
                                                         120*customPar$qn[41]))*12*customPar$qn[42] +  # Unstable - Monthly
                                      (30*1 + 
                                       ifelse(customPar$response[40]=='Lay-CHW', 0, 
-                                                        120*customPar$qn[41]))*4*(1 - customPar$qn[42])), # Stable - Quarterly
+                                                        120*customPar$qn[41]))*4*(1 - customPar$qn[42]), # Stable - Quarterly
                 'Clinical-Medical', 0,
-                'Clinical-Nursing', tx_curr_pmtct_already_target*(
-                                              25*1*12*customPar$qn[42] +  # Unstable - Monthly
-                                              25*1*4*(1 - customPar$qn[42])), # Stable - Quarterly
-                'Data Clerk', tx_curr_pmtct_already_target*(
-                                              10*1*12*customPar$qn[42] +  # Unstable - Monthly
-                                              10*1*4*(1 - customPar$qn[42])), # Stable - Quarterly 
+                'Clinical-Nursing',           25*1*12*customPar$qn[42] +  # Unstable - Monthly
+                                              25*1*4*(1 - customPar$qn[42]), # Stable - Quarterly
+                'Data Clerk',                 10*1*12*customPar$qn[42] +  # Unstable - Monthly
+                                              10*1*4*(1 - customPar$qn[42]), # Stable - Quarterly 
                 'Laboratory', 0,
-                'Lay-CHW', tx_curr_pmtct_already_target*(
-                                              ifelse(customPar$response[40]=='Lay-CHW', 120*customPar$qn[41], 
+                'Lay-CHW',            ifelse(customPar$response[40]=='Lay-CHW', 120*customPar$qn[41], 
                                                                0)*12*customPar$qn[42] + # Unstable - Monthly
-                                              ifelse(customPar$response[40]=='Lay-CHW', 120*customPar$qn[41], 
-                                                               0)*4*(1 - customPar$qn[42])), # Stable - Quarterly
+                                      ifelse(customPar$response[40]=='Lay-CHW', 120*customPar$qn[41], 
+                                                               0)*4*(1 - customPar$qn[42]), # Stable - Quarterly
                 'Lay-Counselor', 0,
                 'Pharmacy', 0)
               
@@ -444,8 +423,8 @@ tot_mins <- ddply(programTargets, .(PSNU),
               # [17] TX_CURR Key Population: Drug Dispensing Frequency & Clinical Consultations
               # no of clients served
               # 12.  What percentage of TX_CURR: KP are seen at a facility (vs. community)?
-              clients_served_fac <- tx_curr_kp_target*customPar$qn[12]        # facility
-              clients_served_com <- tx_curr_kp_target*(1-customPar$qn[12])    # community
+              clients_served_fac <- customPar$qn[12]        # facility
+              clients_served_com <- 1-customPar$qn[12]    # community
               
               # total no. of visits annually
               tot_visits_fac <- clients_served_fac*1       # Facility
@@ -566,22 +545,21 @@ tot_mins <- ddply(programTargets, .(PSNU),
               TOT_MINS[[17]] <- data.frame(indicator='TX_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
               # [18] TX_PVLS_Total 
-              target <- x$cop_target[x$pathway=='TX_PVLS_Total']     # COP target
               # 30. What percentage of TX_PVLS are targeted for the following schedules?
                       # >2x/year, 2x/year, 1x/year
               # Total no. of minutes
               tot_mins <- list( 
-                'Case Manager', target*(10*1 + 10*1)*(4*customPar$qn[37] +   # >2x/year
+                'Case Manager', (10*1 + 10*1)*(4*customPar$qn[37] +   # >2x/year
                                                       2*customPar$qn[38] +   # 2x/year
                                                       1*customPar$qn[39]),   # 1x/year
-                'Clinical-Medical', target*(5*1 + 10*1)*(4*customPar$qn[37] +   # >2x/year
+                'Clinical-Medical', (5*1 + 10*1)*(4*customPar$qn[37] +   # >2x/year
                                                          2*customPar$qn[38] +   # 2x/year
                                                          1*customPar$qn[39]),   # 1x/year
                 'Clinical-Nursing', 0,
-                'Data Clerk', target*20*1*(4*customPar$qn[37] +   # >2x/year
+                'Data Clerk', 20*1*(4*customPar$qn[37] +   # >2x/year
                                            2*customPar$qn[38] +   # 2x/year
                                            1*customPar$qn[39]),   # 1x/year 
-                'Laboratory', target*15*1*(4*customPar$qn[37] +   # >2x/year
+                'Laboratory', 15*1*(4*customPar$qn[37] +   # >2x/year
                                            2*customPar$qn[38] +   # 2x/year
                                            1*customPar$qn[39]),   # 1x/year
                 'Lay-CHW', 0,
@@ -595,13 +573,13 @@ tot_mins <- ddply(programTargets, .(PSNU),
               return(TOT_MINS)
             })
 
-tot_mins$tot_mins[tot_mins$tot_mins=='NaN'] <- 0
-
 tot_mins <- tot_mins %>% 
   mutate(program_area=gsub("(*_)*.[A-Z]+$", '', indicator)) %>% 
   group_by(PSNU,program_area,cadre) %>% 
   summarise(tot_mins=sum(as.numeric(tot_mins))) %>% 
     ungroup()
+
+write.csv(tot_mins, 'C:/Users/owner/Documents/palladium/HRH/Output Tables/tot_mins.csv', row.names = F)
 
 # Available working time
 # --------------------------------------
@@ -670,9 +648,10 @@ current_hrh <- current_hrh %>%
   mutate(cadre=gsub('_', '-', gsub('_Total', '', cadre)),
          program_area=gsub("\\w+-", '', cadre),
          cadre=gsub(".\\w+$", '', cadre)) %>% 
-  group_by(PSNU,cadre,program_area) %>% 
-  mutate(current_hrh=sum(as.numeric(current_hrh))) %>% 
-  ungroup() %>% 
+  # group_by(PSNU,cadre,program_area) %>% 
+  mutate(current_hrh=as.numeric(current_hrh)) %>%
+  # mutate(current_hrh=sum(as.numeric(current_hrh))) %>% 
+  # ungroup() %>% 
   mutate(cadre=gsub('Case-Manager', 'Case Manager', cadre),
          cadre=gsub('Data-Clerk', 'Data Clerk', cadre)) %>% 
   full_join(current_salaries)
@@ -695,7 +674,21 @@ current_hrh_total <- current_hrh %>%
   full_join(psnu_list) %>% 
   mutate(`Cost (USD)`=current_hrh*current_salaries)
 
-program_targets <- programTargets %>% 
+PrEP_Target <- c('COP','[-]15%','[+]15%','COP','[-]15%','[+]15%','COP','[-]15%','[+]15%','COP','[-]15%','[+]15%','COP',
+                 '[-]15%','[+]15%','COP','[-]15%','[+]15%','COP','[-]15%','[+]15%','COP','[-]15%','[+]15%','COP','[-]15%','[+]15%')
+HTS_Target <- c('COP','COP','COP','[-]15%','[-]15%','[-]15%','[+]15%','[+]15%','[+]15%','COP','COP','COP','[-]15%','[-]15%',
+                '[-]15%','[+]15%','[+]15%','[+]15%','COP','COP','COP','[-]15%','[-]15%','[-]15%','[+]15%','[+]15%','[+]15%')
+TX_Target <- c('COP','COP','COP','COP','COP','COP','COP','COP','COP','[-]15%','[-]15%','[-]15%','[-]15%','[-]15%','[-]15%',
+               '[-]15%','[-]15%','[-]15%','[+]15%','[+]15%','[+]15%','[+]15%','[+]15%','[+]15%','[+]15%','[+]15%','[+]15%')
+
+scenarios <- data.frame(PrEP_Target=PrEP_Target, HTS_Target=HTS_Target,	TX_Target=TX_Target, stringsAsFactors = F)
+scenarios <- scenarios %>% 
+  mutate(scenario=paste(PrEP_Target,HTS_Target,TX_Target, sep='&')) %>%
+  gather(program_area,target_multiplier,PrEP_Target:TX_Target) %>% 
+  mutate(target_multiplier=ifelse(target_multiplier=='COP', 1, ifelse(target_multiplier=='[-]15%', 0.85, 1.15)),
+         program_area=gsub('_Target', '', program_area))
+
+program_targets_raw <- programTargets %>% 
   mutate(indicator=gsub("(_\\w+)_.*", "\\1", pathway),
          indicator=ifelse(grepl( 'HTS_TST', indicator), 'HTS_TST', indicator),
          program_area=gsub("(*_)*.[A-Z]+$", '', indicator)) %>% 
@@ -707,83 +700,90 @@ program_targets <- programTargets %>%
   full_join(psnu_list) %>% 
   select(PSNU,cop_target,indicator,program_area,`Target Scenario`)
 
-hrh <- program_targets %>% 
-  # mutate(indicator=gsub("(_\\w+)_.*", "\\1", pathway),
-  #        indicator=ifelse(grepl( 'HTS_TST', indicator), 'HTS_TST', indicator),
-  #        program_area=gsub("(*_)*.[A-Z]+$", '', indicator)) %>% 
-  # group_by(PSNU,indicator) %>% 
-  # mutate(cop_target=ifelse(indicator=='HTS_TST', sum(cop_target), cop_target)) %>% 
-  # filter(!grepl('PMTCT|_KP', pathway)) %>%
-  # slice(1) %>% 
-  # ungroup() %>%
+hrh <- program_targets_raw %>% 
   filter(!(indicator %in% c('PrEP_NEW','TX_NEW'))) %>% 
   group_by(PSNU,program_area) %>% 
   mutate(cop_target=sum(cop_target)) %>% 
   select(-indicator) %>% 
   slice(1) %>%
-  ungroup() 
-
-hrh <- hrh %>% 
+  ungroup() %>% 
   full_join(tot_mins) %>% 
   full_join(awt) %>%
   full_join(psnu_list) %>% 
-  full_join(current_hrh) %>% 
-  mutate(ServiceStandard = ifelse(tot_mins>0, 60/tot_mins, 0),
-         AnnualWorkload = cop_target * ServiceStandard,
-         StandardWorkload = ServiceStandard * awt_hrs,
+  full_join(current_hrh) 
+
+calculateHRH <- function(hrh_data) {
+  hrh_data <- hrh_data %>%
+  mutate(ServiceStandard = ifelse(tot_mins>0, 60/tot_mins, 0),    # clients per hour (rate of working)
+         AnnualWorkload = cop_target,
+         StandardWorkload = ServiceStandard * awt_hrs,     # No. of clients that can be served in a year
          CategoryAllowedStandard = (weekly_non_clinical_hrs/(working_days_wk * working_hrs_day))/working_hrs_day,
          CategoryAllowedFactor = 1 / (1 - (CategoryAllowedStandard / awt_hrs * 100)), 
          Need = ifelse(StandardWorkload>0, (AnnualWorkload/StandardWorkload)*CategoryAllowedFactor, 0),
          `Total current staff (FTEs)`=sum(current_hrh),
          `Total need (FTEs)`=sum(Need)) %>% 
-  select(`Target Scenario`,`Total need (FTEs)`,`Total current staff (FTEs)`,PSNU,program_area,cadre,current_hrh,Need) %>% 
-  group_by(program_area,cadre) %>% 
-  mutate(Current=sum(current_hrh),
-         Need=sum(Need),
-         Gap=(Need - Current)) %>% 
-  slice(1) %>% 
-  ungroup() %>% 
-  select(-PSNU) %>% 
-  # mutate(total_need=sum(Need)
-  # ,total_current_hrh=sum(current_hrh)
-  # ) %>% 
-  gather(measure, value, Current,Need,Gap)
-
-for (measure in c("Current","Need")) {
-  for (cadre in unique(hrh$cadre)) {
-    hrh[paste('Total: ' , cadre, ' (', measure, ')', sep='')]=sum(hrh$value[hrh$measure==measure & hrh$cadre==cadre])
+    select(`Target Scenario`,`Total need (FTEs)`,`Total current staff (FTEs)`,PSNU,program_area,cadre,current_hrh,Need) %>% 
+    group_by(program_area,cadre) %>% 
+    mutate(Current=sum(current_hrh),
+           Need=sum(Need),
+           Gap=(Need - Current)) %>% 
+    slice(1) %>% 
+    ungroup() %>% 
+    select(-PSNU,-current_hrh) %>% 
+    gather(measure, value, Current,Need,Gap)
+  
+  for (measure in c("Current","Need")) {
+    for (cadre in unique(hrh_data$cadre)) {
+      hrh_data[paste('Total: ' , cadre, ' (', measure, ')', sep='')]=sum(hrh_data$value[hrh_data$measure==measure & hrh_data$cadre==cadre])
+    }
   }
+  
+  for (program_area in unique(hrh_data$program_area)) {
+    hrh_data[paste(program_area, '(Gap)')]=sum(hrh_data$value[hrh_data$measure=='Gap' & hrh_data$program_area==program_area])
+  }
+  
+  table_r <- hrh_data %>%
+    mutate(program_area_cadre_measure=paste(program_area, ': ', cadre, ' (', measure, ')', sep='')) %>% 
+    select(-c(program_area,cadre,measure)) %>% 
+    spread(program_area_cadre_measure,value) %>% 
+    # select(`Target Scenario`,PrEP_Target,	HTS_Target,	TX_Target,`Total need (FTEs)`,`Total current staff (FTEs)`,
+    select(`Target Scenario`,`Total need (FTEs)`,`Total current staff (FTEs)`,
+           `Total: Clinical-Medical (Need)`,`Total: Clinical-Nursing (Need)`,`Total: Lay-Counselor (Need)`,`Total: Lay-CHW (Need)`,
+           `Total: Case Manager (Need)`,`Total: Pharmacy (Need)`,`Total: Laboratory (Need)`,`Total: Data Clerk (Need)`,
+           `Total: Clinical-Medical (Current)`,`Total: Clinical-Nursing (Current)`,`Total: Lay-Counselor (Current)`,
+           `Total: Lay-CHW (Current)`,`Total: Case Manager (Current)`,`Total: Pharmacy (Current)`,`Total: Laboratory (Current)`,
+           `Total: Data Clerk (Current)`,`PrEP: Clinical-Medical (Need)`,`PrEP: Clinical-Nursing (Need)`,`PrEP: Lay-Counselor (Need)`,
+           `PrEP: Lay-CHW (Need)`,`PrEP: Case Manager (Need)`,`PrEP: Pharmacy (Need)`,`PrEP: Laboratory (Need)`,
+           `PrEP: Data Clerk (Need)`,`PrEP: Clinical-Medical (Current)`,`PrEP: Clinical-Nursing (Current)`,
+           `PrEP: Lay-Counselor (Current)`,`PrEP: Lay-CHW (Current)`,`PrEP: Case Manager (Current)`,`PrEP: Pharmacy (Current)`,
+           `PrEP: Laboratory (Current)`,`PrEP: Data Clerk (Current)`,`HTS: Clinical-Medical (Need)`,`HTS: Clinical-Nursing (Need)`,
+           `HTS: Lay-Counselor (Need)`,`HTS: Lay-CHW (Need)`,`HTS: Case Manager (Need)`,`HTS: Pharmacy (Need)`,
+           `HTS: Laboratory (Need)`,`HTS: Data Clerk (Need)`,`HTS: Clinical-Medical (Current)`,`HTS: Clinical-Nursing (Current)`,
+           `HTS: Lay-Counselor (Current)`,`HTS: Lay-CHW (Current)`,`HTS: Case Manager (Current)`,`HTS: Pharmacy (Current)`,
+           `HTS: Laboratory (Current)`,`HTS: Data Clerk (Current)`,`TX: Clinical-Medical (Need)`,`TX: Clinical-Nursing (Need)`,
+           `TX: Lay-Counselor (Need)`,`TX: Lay-CHW (Need)`,`TX: Case Manager (Need)`,`TX: Pharmacy (Need)`,`TX: Laboratory (Need)`,
+           `TX: Data Clerk (Need)`,`TX: Clinical-Medical (Current)`,`TX: Clinical-Nursing (Current)`,`TX: Lay-Counselor (Current)`,
+           `TX: Lay-CHW (Current)`,`TX: Case Manager (Current)`,`TX: Pharmacy (Current)`,`TX: Laboratory (Current)`,
+           `TX: Data Clerk (Current)`,`PrEP (Gap)`,`HTS (Gap)`,`TX (Gap)`)
 }
 
-for (program_area in unique(hrh$program_area)) {
-  hrh[paste(program_area, '(Gap)')]=sum(hrh$value[hrh$measure=='Gap' & hrh$program_area==program_area])
-}
+# table_r <- calculateHRH(hrh)
 
-hrh$PrEP_Target = hrh$HTS_Target = hrh$TX_Target <- 'COP'
+table_r <- ddply(scenarios, .(scenario), function(x){
+  this_scenario <- full_join(hrh,x) %>% 
+    mutate(cop_target=cop_target * target_multiplier)
+  
+  this_scenario <- calculateHRH(this_scenario)
+  
+  this_scenario$PrEP_Target = strsplit(x$scenario, '&')[[1]][1]
+  this_scenario$HTS_Target = strsplit(x$scenario, '&')[[1]][2]
+  this_scenario$TX_Target = strsplit(x$scenario, '&')[[1]][3]
+  
+  this_scenario <- this_scenario %>% 
+    select(`Target Scenario`,PrEP_Target,	HTS_Target,	TX_Target, everything())
+})
 
-table_r <- hrh %>%
-  mutate(program_area_cadre_measure=paste(program_area, ': ', cadre, ' (', measure, ')', sep='')) %>% 
-  select(-c(program_area,cadre,measure)) %>% 
-  spread(program_area_cadre_measure,value) %>% 
-  select(`Target Scenario`,PrEP_Target,	HTS_Target,	TX_Target,	`Total need (FTEs)`,`Total current staff (FTEs)`,
-         `Total: Clinical-Medical (Need)`,`Total: Clinical-Nursing (Need)`,`Total: Lay-Counselor (Need)`,`Total: Lay-CHW (Need)`,
-         `Total: Case Manager (Need)`,`Total: Pharmacy (Need)`,`Total: Laboratory (Need)`,`Total: Data Clerk (Need)`,
-         `Total: Clinical-Medical (Current)`,`Total: Clinical-Nursing (Current)`,`Total: Lay-Counselor (Current)`,
-         `Total: Lay-CHW (Current)`,`Total: Case Manager (Current)`,`Total: Pharmacy (Current)`,`Total: Laboratory (Current)`,
-         `Total: Data Clerk (Current)`,`PrEP: Clinical-Medical (Need)`,`PrEP: Clinical-Nursing (Need)`,`PrEP: Lay-Counselor (Need)`,
-         `PrEP: Lay-CHW (Need)`,`PrEP: Case Manager (Need)`,`PrEP: Pharmacy (Need)`,`PrEP: Laboratory (Need)`,
-         `PrEP: Data Clerk (Need)`,`PrEP: Clinical-Medical (Current)`,`PrEP: Clinical-Nursing (Current)`,
-         `PrEP: Lay-Counselor (Current)`,`PrEP: Lay-CHW (Current)`,`PrEP: Case Manager (Current)`,`PrEP: Pharmacy (Current)`,
-         `PrEP: Laboratory (Current)`,`PrEP: Data Clerk (Current)`,`HTS: Clinical-Medical (Need)`,`HTS: Clinical-Nursing (Need)`,
-         `HTS: Lay-Counselor (Need)`,`HTS: Lay-CHW (Need)`,`HTS: Case Manager (Need)`,`HTS: Pharmacy (Need)`,
-         `HTS: Laboratory (Need)`,`HTS: Data Clerk (Need)`,`HTS: Clinical-Medical (Current)`,`HTS: Clinical-Nursing (Current)`,
-         `HTS: Lay-Counselor (Current)`,`HTS: Lay-CHW (Current)`,`HTS: Case Manager (Current)`,`HTS: Pharmacy (Current)`,
-         `HTS: Laboratory (Current)`,`HTS: Data Clerk (Current)`,`TX: Clinical-Medical (Need)`,`TX: Clinical-Nursing (Need)`,
-         `TX: Lay-Counselor (Need)`,`TX: Lay-CHW (Need)`,`TX: Case Manager (Need)`,`TX: Pharmacy (Need)`,`TX: Laboratory (Need)`,
-         `TX: Data Clerk (Need)`,`TX: Clinical-Medical (Current)`,`TX: Clinical-Nursing (Current)`,`TX: Lay-Counselor (Current)`,
-         `TX: Lay-CHW (Current)`,`TX: Case Manager (Current)`,`TX: Pharmacy (Current)`,`TX: Laboratory (Current)`,
-         `TX: Data Clerk (Current)`,`PrEP (Gap)`,`HTS (Gap)`,`TX (Gap)`)
-
+table_r <- table_r %>% select(-scenario)
 
 # Prioritization ranking
 # --------------------------------------
@@ -808,7 +808,7 @@ table_l <- current_hrh_total %>%
 write.csv(table_l, 'Output Tables/table_l.csv', row.names = F)
 
 # C-Current staff and targets
-table_c <- program_targets %>% 
+table_c <- program_targets_raw %>% 
   select(`Target Scenario`,PSNU,cop_target,indicator) %>% 
   group_by(PSNU,indicator) %>% 
   slice(1) %>% 
@@ -825,6 +825,22 @@ write.csv(table_c, 'Output Tables/table_c.csv', row.names = F)
 # R-Current staff, need & gap
 write.csv(table_r, 'Output Tables/table_r.csv', row.names = F)
 
+# export R object for PRI calculations
+hrh_out <- hrh %>%
+  mutate(ServiceStandard = ifelse(tot_mins>0, 60/tot_mins, 0),    # clients per hour (rate of working)
+         AnnualWorkload = cop_target,
+         StandardWorkload = ServiceStandard * awt_hrs,     # No. of clients that can be served in a year
+         CategoryAllowedStandard = (weekly_non_clinical_hrs/(working_days_wk * working_hrs_day))/working_hrs_day,
+         CategoryAllowedFactor = 1 / (1 - (CategoryAllowedStandard / awt_hrs * 100)), 
+         Need = ifelse(StandardWorkload>0, (AnnualWorkload/StandardWorkload)*CategoryAllowedFactor, 0),
+         `Total current staff (FTEs)`=sum(current_hrh),
+         `Total need (FTEs)`=sum(Need)) %>% 
+  select(`Target Scenario`,PSNU,program_area,cadre,current_hrh,Need,current_salaries)
+
+
+saveRDS(hrh_out, file='Output Tables/hrh_out.RData')
+
+# xx <- readRDS('Output Tables/hrh_out.RData') 
 # PRI List
 
 
