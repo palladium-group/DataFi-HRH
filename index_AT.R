@@ -62,7 +62,7 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
               TOT_MINS <- list()
               
               ########### PREP
-              # [1] PREP_NEW General population
+              # [1] PREP_NEW Total population
               prep_new_target <- x$cop_target[x$target=='PrEP_NEW_Total']     # COP target
               
               # no of clients served
@@ -92,13 +92,13 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                                  ifelse(prep_new_target==0, 0, tot_visits_com*20*customPar$qn[14]*100/prep_new_target),
                 'Pharmacy', tot_visits_fac*15*1 + 0)
               
-              TOT_MINS[[1]] <- data.frame(pathway='PrEP_NEW - GP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              TOT_MINS[[1]] <- data.frame(pathway='PrEP_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
               # [2] PREP_NEW key populations
-              TOT_MINS[[2]] <- data.frame(pathway='PrEP_NEW - KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              # TOT_MINS[[2]] <- data.frame(pathway='PrEP_NEW - KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
               
-              # [3] PrEP_CURR General population 
+              # [2] PrEP_CURR Total population 
               # no of clients served
               # 6. What percentage of people who start PrEP in the upcoming COP year will likely continue 
               #    PrEP from a health facility (vs. community)?
@@ -139,13 +139,13 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', tot_visits_fac*30*1 + tot_visits_com*30*1,
                 'Pharmacy', tot_visits_fac*15*1 + 0)
               
-              TOT_MINS[[3]] <- data.frame(pathway='PrEP_CURR - GP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              TOT_MINS[[2]] <- data.frame(pathway='PrEP_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               # [4] PrEP_CURR key population
-              TOT_MINS[[4]] <- data.frame(pathway='PrEP_CURR - KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              # TOT_MINS[[4]] <- data.frame(pathway='PrEP_CURR - KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               ########### HTS
-              # [5] HTS_SELF (Total)
+              # [3] HTS_SELF (Total)
               # no of clients served
               # 19. What percentage of HTS_SELF are unassisted (vs. assisted)?
               clients_served_unass <- customPar$qn[19]        # unassisted
@@ -174,9 +174,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                            tot_visits_fac*(10*customPar$qn[20] + 10*0.05) + 0,      # assisted facility
                 'Pharmacy', 0 + 0 + 0)
               
-              TOT_MINS[[5]] <- data.frame(pathway='HTS_SELF', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              TOT_MINS[[3]] <- data.frame(pathway='HTS_SELF', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
-              # [6] HTS_TST_Mobile
+              # [4] HTS_TST_Mobile
               # Total no. of minutes
               tot_mins <- list( 
                 'Case Manager', 0,
@@ -188,7 +188,7 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', 55*1, 
                 'Pharmacy', 0)
               
-              TOT_MINS[[6]] <- data.frame(pathway='HTS_TST_Mobile', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              TOT_MINS[[4]] <- data.frame(pathway='HTS_TST_Mobile', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               # Total no. of minutes
               htsTime <- function(pathway) {
@@ -210,15 +210,15 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 tot_mins <- data.frame(pathway=pathway, matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               }
               
-              TOT_MINS[[7]] <- htsTime('HTS_TST_PMTCT_ANC1')          # [5] HTS_TST_PMTCT_ANC1
-              TOT_MINS[[8]] <- htsTime('HTS_TST_PMTCT_Post_ANC1')     # [6] HTS_TST_PMTCT_Post_ANC1
-              TOT_MINS[[9]] <- htsTime('HTS_TST_Facility_Index')      # [7] HTS_TST_Facility_Index
+              TOT_MINS[[5]] <- htsTime('HTS_TST_PMTCT_ANC1')          # [5] HTS_TST_PMTCT_ANC1
+              TOT_MINS[[6]] <- htsTime('HTS_TST_PMTCT_Post_ANC1')     # [6] HTS_TST_PMTCT_Post_ANC1
+              TOT_MINS[[7]] <- htsTime('HTS_TST_Facility_Index')      # [7] HTS_TST_Facility_Index
               
-              TOT_MINS[[10]] <- htsTime('HTS_TST_STI')                 # [8] HTS_TST_STI 
-              TOT_MINS[[11]] <- htsTime('HTS_TST_Other_PITC')          # [9] HTS_TST_Other_PITC
-              TOT_MINS[[12]] <- htsTime('HTS_TST_Inpatient')          # [10] HTS_TST_Inpatient
+              TOT_MINS[[8]] <- htsTime('HTS_TST_STI')                 # [8] HTS_TST_STI 
+              TOT_MINS[[9]] <- htsTime('HTS_TST_Other_PITC')          # [9] HTS_TST_Other_PITC
+              TOT_MINS[[10]] <- htsTime('HTS_TST_Inpatient')          # [10] HTS_TST_Inpatient
               
-              # [13] HTS_TST_IndexMod
+              # [11] HTS_TST_IndexMod
               # Total no. of minutes
               tot_mins <- list( 
                 # 4.  Can Lay-Counselors provide testing? 
@@ -231,10 +231,10 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', ifelse(customPar$resp[4], 125*1, 0),
                 'Pharmacy', 0)
               
-              TOT_MINS[[13]] <- data.frame(pathway='HTS_TST_IndexMod', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              TOT_MINS[[11]] <- data.frame(pathway='HTS_TST_IndexMod', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
               ########### TX 
-              # [14] TX_NEW General Patients 
+              # [12] TX_NEW General Patients 
               # no of clients served
               # 9. What percentage of TX_NEW: general population are seen at a facility (vs. community)? 
               clients_served_fac <- customPar$qn[9]        # facility
@@ -256,9 +256,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', 0 + 0,
                 'Pharmacy', tot_visits_fac*ifelse(customPar$resp[22], 0, 15*1) + tot_visits_com*15*1)
               
-              TOT_MINS[[14]] <- data.frame(pathway='TX_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              TOT_MINS[[12]] <- data.frame(pathway='TX_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
-              # [15] TX_NEW_KP 
+              # [13] TX_NEW_KP 
               # no of clients served
               # 10.  What percentage of TX_NEW: KP are seen at a facility (vs. community? 
               clients_served_fac <- customPar$qn[10]        # facility
@@ -280,9 +280,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', 120*1.72,
                 'Pharmacy', tot_visits_fac*ifelse(customPar$resp[22], 0, 15*1) + tot_visits_com*15*1)
               
-              TOT_MINS[[15]] <- data.frame(pathway='TX_NEW_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              TOT_MINS[[13]] <- data.frame(pathway='TX_NEW_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
-              # [16] PMTCT_ART_New_on_life-long_ART 
+              # [14] PMTCT_ART_New_on_life-long_ART 
               # Total no. of minutes
               tot_mins <- list( 
                 'Case Manager', 40*1 + 30*1, 
@@ -294,9 +294,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', 0,
                 'Pharmacy', 0)
               
-              TOT_MINS[[16]] <- data.frame(pathway='PMTCT_ART_New', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              TOT_MINS[[14]] <- data.frame(pathway='PMTCT_ART_New', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
-              # [17] TX_CURR General Patients: Drug Dispensing Frequency & Clinical Consultations
+              # [15] TX_CURR General Patients: Drug Dispensing Frequency & Clinical Consultations
               # no of clients served
               # 11.  What percentage of TX_CURR: general population are seen at a facility (vs. community)? 
               clients_served_fac <- customPar$qn[11]        # facility
@@ -417,9 +417,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                                         2*customPar$qn[26]) +                  # 6 months or more 
                                         0))
               
-              TOT_MINS[[17]] <- data.frame(pathway='TX_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              TOT_MINS[[15]] <- data.frame(pathway='TX_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
-              # [18] PMTCT_ART_Already_on_life-long_ART_at_the_beginning_of_current_pregnancy 
+              # [16] PMTCT_ART_Already_on_life-long_ART_at_the_beginning_of_current_pregnancy 
               # Total no. of minutes
               tot_mins <- list( 
                 # qn[37] 28. Among PMTCT_ART Already on Life-long ART at the beginning of the current pregnancy, is the tracing 
@@ -448,9 +448,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', 0,
                 'Pharmacy', 15*1)
               
-              TOT_MINS[[18]] <- data.frame(pathway='PMTCT_ART_Already', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+              TOT_MINS[[16]] <- data.frame(pathway='PMTCT_ART_Already', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
               
-              # [19] TX_CURR Key Population: Drug Dispensing Frequency & Clinical Consultations
+              # [17] TX_CURR Key Population: Drug Dispensing Frequency & Clinical Consultations
               # no of clients served
               # qn[12] 12.  What percentage of TX_CURR: KP are seen at a facility (vs. community)?
               clients_served_fac <- customPar$qn[12]        # facility
@@ -576,9 +576,9 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                                             0)
                 )
               
-              TOT_MINS[[19]] <- data.frame(pathway='TX_CURR_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              TOT_MINS[[17]] <- data.frame(pathway='TX_CURR_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
-              # [20] TX_PVLS_Total 
+              # [18] TX_PVLS_Total 
               # 27. What percentage of TX_PVLS are targeted for the following schedules?
                       # qn[34] >2x/year, 
                       # qn[35] 2x/year
@@ -602,7 +602,7 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
                 'Lay-Counselor', 0,
                 'Pharmacy', 0)
               
-              TOT_MINS[[20]] <- data.frame(pathway='TX_PVLS', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+              TOT_MINS[[18]] <- data.frame(pathway='TX_PVLS', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
               
               TOT_MINS <- do.call(rbind, TOT_MINS)
               names(TOT_MINS) <- c('pathway','cadre','tot_mins')
@@ -735,14 +735,18 @@ tableRoutput <- function(hrh_data){
   hrh_data <- calculateNeed(hrh_data)
   
   hrh_data <- hrh_data %>%
-    select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,current_hrh,PSNU,program_area,cadre,current_hrh,need) %>% 
-    group_by(program_area,cadre) %>% 
-    mutate(Current=sum(current_hrh),
-           Need=sum(need),
-           Gap=(need - Current)) %>% 
+    select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,current_hrh,PSNU,program_area,target,cadre,current_hrh,need) %>% 
+    group_by(program_area,PSNU,cadre) %>% 
+    mutate(Need=sum(need)) %>%
     slice(1) %>% 
     ungroup() %>% 
-    select(-PSNU,-current_hrh, -need) %>% 
+    group_by(program_area,cadre) %>% 
+    mutate(Current=sum(current_hrh),
+           NEED=sum(Need),
+           Gap=(need - Current)) #%>% 
+    slice(1) %>% 
+    ungroup() %>% 
+    select(-PSNU,-current_hrh, -need,-target) %>% 
     gather(measure, value, Current,Need,Gap)
   
   total_hrh_data <- hrh_data %>%    
