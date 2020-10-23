@@ -21,8 +21,9 @@ setwd('C:/Users/owner/Documents/palladium/HRH/DataFi-HRH/HRH-DataFiles')
 
 #Import data from DCT
 # ==================================================================================================
-dct <- "Data Collection Templates/2020 10 19 Data.FI HRH Solution Data Collection Template.USAID_Nigeria pilot.xlsx"
-# dct <- "Data Collection Templates/2020 10 01 Data.FI HRH Solution Data Collection Template_TZ.lp.droppedQn22Qn24.xlsx"
+# per the user manual, the DCT is to be saved using the following convention:  OU_COP Planning Year_FY Target Scenario_today’s date (YYYYMMDD)
+# dct <- "Data Collection Templates/2020 10 19 Data.FI HRH Solution Data Collection Template.USAID_Nigeria pilot.xlsx"
+dct <- "Data Collection Templates/2020 10 01 Data.FI HRH Solution Data Collection Template_TZ.lp.droppedQn22Qn24.xlsx"
 # dct <- "HRH Data Collection/2020 10 13 Data.FI HRH Solution Data Collection Template.USAID_TZ.xlsx"
 
 # Customization parameters
@@ -39,10 +40,6 @@ names(program_targets) <- gsub("\\s\\(", '_', gsub("\\)", '', names(program_targ
 names(program_targets) <- gsub("\\s+", '_', names(program_targets))
 names(program_targets) <- gsub("__", '_', names(program_targets))
 
-# Calculations
-# ==================================================================================================
-# Total no. of minutes needed by a HW annually
-# --------------------------------------
 program_targets <- as.data.frame(program_targets) %>%
   filter(!is.na(PSNU)) %>% # filter out entirely empty rows that come with the excel sheet
   select(-DATIM_UID,-Ref_ID)
@@ -54,8 +51,16 @@ for (i in (1:length(names(program_targets)))[!(names(program_targets) %in% c("Re
   program_targets[,i] <- ifelse(is.na(program_targets[,i]), 0, program_targets[,i])
 }
 
+# Calculations
+# ==================================================================================================
+# Total no. of minutes needed by a HW annually
+# --------------------------------------
 program_targets_time <- program_targets %>% 
   gather(target, cop_target,-PSNU)
+
+# 14. In the planning COP year, how many clients would you expect to need to screen to reach the PrEP_NEW target?
+tot_prep_new_target <- sum(program_targets$PrEP_NEW_Total)
+expect_screening_pctg <- ifelse(tot_prep_new_target==0, 0, customPar$qn[14]/tot_prep_new_target)
 
 tot_mins <- ddply(program_targets_time, .(PSNU), 
             function(x){
@@ -63,8 +68,6 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
               
               ########### PREP
               # [1] PREP_NEW Total population
-              prep_new_target <- x$cop_target[x$target=='PrEP_NEW_Total']     # COP target
-              
               # no of clients served
               # 5. What percentage of people who start PrEP in the upcoming COP year will likely start PrEP in a 
               #    health facility (vs. community)? 
@@ -78,18 +81,14 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
               # Total no. of minutes
               tot_mins <- list( 
                 # 1. Are there case managers in place for follow-up of PrEP_NEW clients? 
-                # 14. In the planning COP year, how many clients would you expect to need to screen to reach the PrEP_NEW target?
-                'Case Manager', tot_visits_fac*(ifelse(prep_new_target==0, 0, 15*customPar$qn[14]*100/prep_new_target) + 
-                                                ifelse(customPar$resp[1], 10*1, 0)) +
-                tot_visits_com*(ifelse(prep_new_target==0, 0, 15*customPar$qn[14]*100/prep_new_target) + 
-                                ifelse(customPar$resp[1], 10*1, 0)),
+                'Case Manager', tot_visits_fac*(expect_screening_pctg*15 + ifelse(customPar$resp[1], 10*1, 0)) +
+                                tot_visits_com*(expect_screening_pctg*15 + ifelse(customPar$resp[1], 10*1, 0)),
                 'Clinical-Medical', tot_visits_fac*20*1 + 0,
                 'Clinical-Nursing', 0 + tot_visits_com*25*1,
                 'Data Clerk', tot_visits_fac*(10*1 + 10*1) + tot_visits_com*(10*1 + 10*1), 
                 'Laboratory', tot_visits_fac*20*1 + tot_visits_com*20*1,
                 'Lay-CHW', 0 + 0,
-                'Lay-Counselor', ifelse(prep_new_target==0, 0, tot_visits_fac*20*customPar$qn[14]*100/prep_new_target) + 
-                                 ifelse(prep_new_target==0, 0, tot_visits_com*20*customPar$qn[14]*100/prep_new_target),
+                'Lay-Counselor', tot_visits_fac*expect_screening_pctg*20 + tot_visits_com*expect_screening_pctg*20,
                 'Pharmacy', tot_visits_fac*15*1 + 0)
               
               TOT_MINS[[1]] <- data.frame(pathway='PrEP_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
@@ -192,9 +191,7 @@ tot_mins <- ddply(program_targets_time, .(PSNU),
               
               # Total no. of minutes
               htsTime <- function(pathway) {
-                
-                cm_deliver_test_time <- ifelse(pathway %in% c('HTS_TST_PMTCT_ANC1','HTS_TST_PMTCT_Post_ANC1','HTS_TST_Facility_Index'),
-                                               10, 0)
+                cm_deliver_test_time <- ifelse(pathway %in% c('HTS_TST_PMTCT_ANC1','HTS_TST_PMTCT_Post_ANC1','HTS_TST_Facility_Index'), 10, 0)
                 
                 tot_mins <- list( 
                   # 3.  Can Case Managers provide testing? 
@@ -618,30 +615,7 @@ client_time <- tot_mins %>%
 # Available working time
 # --------------------------------------
 awt <- data.frame(cadre=c('Clinical-Nursing','Clinical-Medical','Data Clerk','Case Manager','Lay-Counselor',
-                          'Lay-CHW','Laboratory','Pharmacy'), working_days_wk=5, working_hrs_day=8, 
-                  public_holidays=15, special_leave=4, stringsAsFactors = F)
-
-awt$training_days <- apply(awt['cadre'], 1, 
-                           function(x) switch(x,
-                                              'Clinical-Nursing' = 11,
-                                              'Clinical-Medical' = 12,
-                                              'Data Clerk' = 13,
-                                              'Case Manager' = 14,
-                                              'Lay-Counselor' = 14,
-                                              'Lay-CHW' = 14,
-                                              'Laboratory' = 11,
-                                              'Pharmacy' = 11))
-
-awt$weekly_non_clinical_hrs <- apply(awt['cadre'], 1, 
-                           function(x) switch(x,
-                                              'Clinical-Nursing' = 13,
-                                              'Clinical-Medical' = 11,
-                                              'Data Clerk' = 20,
-                                              'Case Manager' = 12,
-                                              'Lay-Counselor' = 12,
-                                              'Lay-CHW' = 12,
-                                              'Laboratory' = 11,
-                                              'Pharmacy' = 11))
+                          'Lay-CHW','Laboratory','Pharmacy'), stringsAsFactors = F)
 
 awt$adjusted_ftes_mins <- apply(awt['cadre'], 1, 
                            function(x) switch(x,
@@ -653,12 +627,6 @@ awt$adjusted_ftes_mins <- apply(awt['cadre'], 1,
                                               'Lay-CHW' = 67872,
                                               'Laboratory' = 71688,
                                               'Pharmacy' = 71688))
-awt <- awt %>% mutate(
-    annual_leave=ifelse(cadre %in% c('Clinical-Medical','Data Clerk'), 24, 21),
-    sick_leave=ifelse(cadre %in% c('Clinical-Nursing','Laboratory','Pharmacy'), 3, 4),
-    awt_days=working_days_wk*52 - (annual_leave+public_holidays+sick_leave+special_leave+training_days),
-    awt_hrs=awt_days*8) 
-
 # HRH need
 # --------------------------------------
 psnu_list <- read_excel(dct, sheet = "1. PSNU List", skip = 2)
@@ -737,13 +705,13 @@ tableRoutput <- function(hrh_data){
   hrh_data <- hrh_data %>%
     select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,current_hrh,PSNU,program_area,target,cadre,current_hrh,need) %>% 
     group_by(program_area,PSNU,cadre) %>% 
-    mutate(Need=sum(need)) %>%
+    mutate(Need=sum(need)) %>%   #sum up the need for indicators within the same (program_area,PSNU,cadre)
     slice(1) %>% 
     ungroup() %>% 
     group_by(program_area,cadre) %>% 
-    mutate(Current=sum(current_hrh),
-           NEED=sum(Need),
-           Gap=(need - Current)) #%>% 
+    mutate(Current=sum(current_hrh),   #sum up the current_hrh for PSNUs within the same (program_area,cadre)
+           Need=sum(Need),             #sum up the Need for PSNUs within the same (program_area,cadre)
+           Gap=(Need - Current)) %>%  
     slice(1) %>% 
     ungroup() %>% 
     select(-PSNU,-current_hrh, -need,-target) %>% 
@@ -751,14 +719,15 @@ tableRoutput <- function(hrh_data){
   
   total_hrh_data <- hrh_data %>%    
     group_by(cadre,measure) %>% 
-    mutate(value=sum(value),
+    mutate(value=sum(value),    #sum up the Need,current_hrh,Gap for program_areas within the same cadre
            program_area='Total') %>%
+    slice(1) %>% 
     ungroup()
   
   prog_area_gap <- hrh_data %>%
     filter(measure=='Gap') %>% 
     group_by(program_area) %>% 
-    mutate(value=sum(value)) %>% 
+    mutate(value=sum(value)) %>%   #sum up the Gap for cadres within the same program_areas 
     slice(1) %>% 
     ungroup() %>% 
     select(-cadre)
@@ -861,6 +830,13 @@ if (TRUE %in% file_exists) {
   }
 }
 Sys.sleep(6)
+
+
+Dashboard1_CurrentStaff&Costs
+Dashboard2_CurrentStaff&Targets
+Dashboard3_StaffingNeed
+Dashboard3_StaffingGap
+
 
 # Dashboard one data
 # --------------------------------------
