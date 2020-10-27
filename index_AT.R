@@ -31,7 +31,7 @@ customPar$qn <- as.numeric(customPar$response)                                  
 customPar$resp <- ifelse(customPar$response %in% c('Yes','No'), customPar$response=='Yes', NA)    # yes/no response
 
 # Import Program targets ----------------------------------------------------------------------
-program_targets <- read_excel(dct, sheet = "2. Program Targets ", na = "0", skip = 3)
+program_targets <- read_excel(dct, sheet = "2. Program Targets ", skip = 3)
 
 # replace problematic spaces and brackets in variable names with underscores
 names(program_targets) <- gsub("\\s\\(", '_', gsub("\\)", '', names(program_targets)))
@@ -39,15 +39,12 @@ names(program_targets) <- gsub("\\s+", '_', names(program_targets))
 names(program_targets) <- gsub("__", '_', names(program_targets))
 
 program_targets <- as.data.frame(program_targets) %>%
-  filter(!is.na(PSNU)) %>% # filter out entirely empty rows that come with the excel sheet
+  filter(!is.na(PSNU),
+         PSNU!="0") %>% # filter out entirely empty rows that come with the excel sheet
   select(-DATIM_UID,-Ref_ID)
 
 names(program_targets)[grepl('PMTCT_ART_New', names(program_targets))] <- 'PMTCT_ART_New'
 names(program_targets)[grepl('PMTCT_ART_Already', names(program_targets))] <- 'PMTCT_ART_Already'
-
-for (i in (1:length(names(program_targets)))[!(names(program_targets) %in% c("Ref_ID","PSNU"))]) {
-  program_targets[,i] <- ifelse(is.na(program_targets[,i]), 0, program_targets[,i])
-}
 
 # Calculate client time ----------------------------------------------------------------------
 program_targets_time <- program_targets %>% 
@@ -55,555 +52,549 @@ program_targets_time <- program_targets %>%
 
 # 14. In the planning COP year, how many clients would you expect to need to screen to reach the PrEP_NEW target?
 tot_prep_new_target <- sum(program_targets$PrEP_NEW_Total)
-expect_screening_pctg <- ifelse(tot_prep_new_target==0, 0, customPar$qn[14]/tot_prep_new_target)
+expect_screening_pctg <- ifelse(tot_prep_new_target==0, 0, 
+                                ifelse(customPar$qn[14]<tot_prep_new_target, 1, customPar$qn[14]/tot_prep_new_target))
 
-tot_mins <- ddply(program_targets_time, .(PSNU), 
-            function(x){
-              TOT_MINS <- list()
-              
-              ########### PREP
-              # [1] PREP_NEW Total population
-              # no of clients served
-              # 5. What percentage of people who start PrEP in the upcoming COP year will likely start PrEP in a 
-              #    health facility (vs. community)? 
-              clients_served_fac <- customPar$qn[5]        # facility
-              clients_served_com <- 1-customPar$qn[5]    # community
-              
-              # total no. of visits annually
-              tot_visits_fac <- clients_served_fac*1       # Facility
-              tot_visits_com <- clients_served_com*1       # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-                # 1. Are there case managers in place for follow-up of PrEP_NEW clients? 
-                'Case Manager', tot_visits_fac*(expect_screening_pctg*15 + ifelse(customPar$resp[1], 10*1, 0)) +
-                                tot_visits_com*(expect_screening_pctg*15 + ifelse(customPar$resp[1], 10*1, 0)),
-                'Clinical-Medical', tot_visits_fac*20*1 + 0,
-                'Clinical-Nursing', 0 + tot_visits_com*25*1,
-                'Data Clerk', tot_visits_fac*(10*1 + 10*1) + tot_visits_com*(10*1 + 10*1), 
-                'Laboratory', tot_visits_fac*20*1 + tot_visits_com*20*1,
-                'Lay-CHW', 0 + 0,
-                'Lay-Counselor', tot_visits_fac*expect_screening_pctg*20 + tot_visits_com*expect_screening_pctg*20,
-                'Pharmacy', tot_visits_fac*15*1 + 0)
-              
-              TOT_MINS[[1]] <- data.frame(pathway='PrEP_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              # [2] PREP_NEW key populations
-              # TOT_MINS[[2]] <- data.frame(pathway='PrEP_NEW - KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              
-              # [2] PrEP_CURR Total population 
-              # no of clients served
-              # 6. What percentage of people who start PrEP in the upcoming COP year will likely continue 
-              #    PrEP from a health facility (vs. community)?
-              # 7. What percentage of people who started PrEP in the current COP year will likely continue 
-              #    PrEP from a health facility (vs. community)?
-              clients_served_fac_start <- customPar$qn[6]        # starting PrEP served at facility
-              clients_served_com_start <- 1-customPar$qn[6]    # starting PrEP served at community
-              clients_served_fac_roll <- customPar$qn[7]          # rolling over PrEP served at facility
-              clients_served_com_roll <- 1-customPar$qn[7]      # rolling over PrEP served at community
-              
-              # adjusted no. of visits per client
-              # 15. How many continuation visits, on average, will clients who start PrEP in the planning COP 
-              #     year have in the planning COP year?
-              # 17. What percentage of clients who start PrEP in the planning COP year would you aim to be on PrEP at 
-              #     the end of the planning COP year?
-              # 16. How many continuation visits, on average, will clients who started PrEP in the year preceding the 
-              #     planning COP year have in the planning COP year?
-              # 18. What percentage of clients who started PrEP in the year preceding the planning COP year and continue 
-              #     PrEP into the planning COP year would you aim to be on PrEP at the end of the planning COP year? 
-              adj_visits_start <- customPar$qn[15]*customPar$qn[17]*0.5    #client starting PrEP
-              adj_visits_roll <- customPar$qn[16]*customPar$qn[18]     #client rolling over
-              
-              # total no. of visits annually
-              tot_visits_fac <- clients_served_fac_start*adj_visits_start + clients_served_fac_roll*adj_visits_roll # Facility
-              tot_visits_com <- clients_served_com_start*adj_visits_start + clients_served_com_roll*adj_visits_roll # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-                # 2. Are there case managers in place for follow-up of PrEP_CURR clients? 
-                # 13. What percentage of people who continue PrEP will have their PrEP delivered to their home? 
-                'Case Manager', tot_visits_fac*(ifelse(customPar$resp[2], 10*1, 0)*1 + 90*customPar$qn[13]) + 
-                tot_visits_com*(ifelse(customPar$resp[2], 10*1, 0)*1 + 90*customPar$qn[13]),
-                'Clinical-Medical', tot_visits_fac*10*1 + 0,
-                'Clinical-Nursing', 0 + tot_visits_com*25*1,
-                'Data Clerk', tot_visits_fac*10*1 + tot_visits_com*10*1, 
-                'Laboratory', tot_visits_fac*20*1 + tot_visits_com*20*1,
-                'Lay-CHW', 0 + 0,
-                'Lay-Counselor', tot_visits_fac*30*1 + tot_visits_com*30*1,
-                'Pharmacy', tot_visits_fac*15*1 + 0)
-              
-              TOT_MINS[[2]] <- data.frame(pathway='PrEP_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              # [4] PrEP_CURR key population
-              # TOT_MINS[[4]] <- data.frame(pathway='PrEP_CURR - KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              ########### HTS
-              # [3] HTS_SELF (Total)
-              # no of clients served
-              # 19. What percentage of HTS_SELF are unassisted (vs. assisted)?
-              clients_served_unass <- customPar$qn[19]        # unassisted
-              # 8. What percentage of assisted HTS_SELF are seen at a facility (vs. community)? 
-              clients_served_fac <- (1-customPar$qn[19])*customPar$qn[8]      # assisted facility
-              clients_served_com <- (1-customPar$qn[19])*(1-customPar$qn[8])    # assisted community
-              
-              # total no. of visits annually
-              tot_visits_unass <- clients_served_unass*1       # unassisted
-              tot_visits_fac <- clients_served_fac*1       # Facility
-              tot_visits_com <- clients_served_com*1       # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-                'Case Manager', 0 + 0 + 0,
-                'Clinical-Medical', 0 + 0 + 0,
-                'Clinical-Nursing', 0 + 0 + 0,
-                'Data Clerk', tot_visits_unass*10*1 + tot_visits_fac*(10*1 + 5*1) + tot_visits_com*(10*1 + 5*1), 
-                'Laboratory', 0 + 0 + 0,
-                # 20. What percentage of assisted HTS_SELF  are seen at a facility by a Lay-Counselor (vs. Lay-CHW)?
-                # 21. What percentage of unassisted HTS_SELF  are seen by a Lay-Counselor (vs. Lay-CHW):
-                'Lay-CHW', tot_visits_unass*2*(1 - customPar$qn[21]) +       # unassisted
-                           tot_visits_fac*(10*(1 - customPar$qn[20]) + 10*0.05) +    # assisted facility
-                           tot_visits_com*(20*1 + 15*0.05),    # assisted community
-                'Lay-Counselor', tot_visits_unass*2*customPar$qn[21] +  # unassisted
-                           tot_visits_fac*(10*customPar$qn[20] + 10*0.05) + 0,      # assisted facility
-                'Pharmacy', 0 + 0 + 0)
-              
-              TOT_MINS[[3]] <- data.frame(pathway='HTS_SELF', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              # [4] HTS_TST_Mobile
-              # Total no. of minutes
-              tot_mins <- list( 
-                'Case Manager', 0,
-                'Clinical-Medical', 0,
-                'Clinical-Nursing', 0,
-                'Data Clerk', 10*0.8, 
-                'Laboratory', 30*1, 
-                'Lay-CHW', 0, 
-                'Lay-Counselor', 55*1, 
-                'Pharmacy', 0)
-              
-              TOT_MINS[[4]] <- data.frame(pathway='HTS_TST_Mobile', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              # Total no. of minutes
-              htsTime <- function(pathway) {
-                cm_deliver_test_time <- ifelse(pathway %in% c('HTS_TST_PMTCT_ANC1','HTS_TST_PMTCT_Post_ANC1','HTS_TST_Facility_Index'), 10, 0)
-                
-                tot_mins <- list( 
-                  # 3.  Can Case Managers provide testing? 
-                  'Case Manager', cm_deliver_test_time + ifelse(customPar$resp[3], 30*1, 0),
-                  'Clinical-Medical', 0,
-                  'Clinical-Nursing', 30*0.9,
-                  'Data Clerk', 10*1, 
-                  'Laboratory', 0 + 30*0.1,
-                  'Lay-CHW', 0, 
-                  'Lay-Counselor', 0,
-                  'Pharmacy', 0)
-                
-                tot_mins <- data.frame(pathway=pathway, matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              }
-              
-              TOT_MINS[[5]] <- htsTime('HTS_TST_PMTCT_ANC1')          # [5] HTS_TST_PMTCT_ANC1
-              TOT_MINS[[6]] <- htsTime('HTS_TST_PMTCT_Post_ANC1')     # [6] HTS_TST_PMTCT_Post_ANC1
-              TOT_MINS[[7]] <- htsTime('HTS_TST_Facility_Index')      # [7] HTS_TST_Facility_Index
-              
-              TOT_MINS[[8]] <- htsTime('HTS_TST_STI')                 # [8] HTS_TST_STI 
-              TOT_MINS[[9]] <- htsTime('HTS_TST_Other_PITC')          # [9] HTS_TST_Other_PITC
-              TOT_MINS[[10]] <- htsTime('HTS_TST_Inpatient')          # [10] HTS_TST_Inpatient
-              
-              # [11] HTS_TST_IndexMod
-              # Total no. of minutes
-              tot_mins <- list( 
-                # 4.  Can Lay-Counselors provide testing? 
-                'Case Manager', 0,
-                'Clinical-Medical', ifelse(customPar$resp[4], 0, 60*0.9),
-                'Clinical-Nursing', ifelse(customPar$resp[4], 0, 60*0.05),
-                'Data Clerk', 10*1, 
-                'Laboratory', ifelse(customPar$resp[4], 0, 60*0.05),
-                'Lay-CHW', ifelse(customPar$resp[4], 0, 60*1), 
-                'Lay-Counselor', ifelse(customPar$resp[4], 125*1, 0),
-                'Pharmacy', 0)
-              
-              TOT_MINS[[11]] <- data.frame(pathway='HTS_TST_IndexMod', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              ########### TX 
-              # [12] TX_NEW General Patients 
-              # no of clients served
-              # 9. What percentage of TX_NEW: general population are seen at a facility (vs. community)? 
-              clients_served_fac <- customPar$qn[9]        # facility
-              clients_served_com <- 1-customPar$qn[9]    # community
-              
-              # total no. of visits annually
-              tot_visits_fac <- clients_served_fac*1       # Facility
-              tot_visits_com <- clients_served_com*1       # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-                #resp[22] 22. Among TX_NEW seen at a facility, is initiation primarily nurse-led?   
-                'Case Manager', tot_visits_fac*(50*1) + tot_visits_com*(50*1),
-                'Clinical-Medical', tot_visits_fac*ifelse(customPar$resp[22], 0, 30*1) + tot_visits_com*40*1,
-                'Clinical-Nursing', tot_visits_fac*ifelse(customPar$resp[22], 60*1, 10*1 + 10*1) + 0,
-                'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
-                'Laboratory', tot_visits_fac*30*1 + tot_visits_com*30*1,
-                'Lay-CHW', 0 + 0,
-                'Lay-Counselor', 0 + 0,
-                'Pharmacy', tot_visits_fac*ifelse(customPar$resp[22], 0, 15*1) + tot_visits_com*15*1)
-              
-              TOT_MINS[[12]] <- data.frame(pathway='TX_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              # [13] TX_NEW_KP 
-              # no of clients served
-              # 10.  What percentage of TX_NEW: KP are seen at a facility (vs. community? 
-              clients_served_fac <- customPar$qn[10]        # facility
-              clients_served_com <- 1-customPar$qn[10]    # community
-              
-              # total no. of visits annually
-              tot_visits_fac <- clients_served_fac*1       # Facility
-              tot_visits_com <- clients_served_com*1       # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-                #resp[22] 22. Among TX_NEW seen at a facility, is initiation primarily nurse-led?   
-                'Case Manager', tot_visits_fac*(50*1) + tot_visits_com*(50*1),
-                'Clinical-Medical', tot_visits_fac*ifelse(customPar$resp[22], 0, 30*1) + tot_visits_com*40*1,
-                'Clinical-Nursing', tot_visits_fac*ifelse(customPar$resp[22], 60*1, 10*1 + 10*1) + 0,
-                'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
-                'Laboratory', tot_visits_fac*30*1 + tot_visits_com*30*1,
-                'Lay-CHW', 0 + 0,
-                'Lay-Counselor', 120*1.72,
-                'Pharmacy', tot_visits_fac*ifelse(customPar$resp[22], 0, 15*1) + tot_visits_com*15*1)
-              
-              TOT_MINS[[13]] <- data.frame(pathway='TX_NEW_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              # [14] PMTCT_ART_New_on_life-long_ART 
-              # Total no. of minutes
-              tot_mins <- list( 
-                'Case Manager', 40*1 + 30*1, 
-                'Clinical-Medical', 0,
-                'Clinical-Nursing', 30*1,
-                'Data Clerk', 25*1, 
-                'Laboratory', 30*1,
-                'Lay-CHW', 0,
-                'Lay-Counselor', 0,
-                'Pharmacy', 0)
-              
-              TOT_MINS[[14]] <- data.frame(pathway='PMTCT_ART_New', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              # [15] TX_CURR General Patients: Drug Dispensing Frequency & Clinical Consultations
-              # no of clients served
-              # 11.  What percentage of TX_CURR: general population are seen at a facility (vs. community)? 
-              clients_served_fac <- customPar$qn[11]        # facility
-              clients_served_com <- 1-customPar$qn[11]    # community
-              
-              # total no. of visits annually
-              tot_visits_fac <- clients_served_fac*1       # Facility
-              tot_visits_com <- clients_served_com*1       # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-              # 23.  What percentage of TX_CURR are receiving drugs on the following schedules?
-                  # qn[24]. <3 months
-                  # qn[25]. 3-5 months
-                  # qn[26]. 6 months or more
-                
-                # qn[31] 25. Among TX_CURR, is the tracing of clients to their home due to missed appointments done primarily 
-                #     by a Lay-CHW or a Case Manager? 
-                # qn[32] 26. What percentage of TX_CURR are traced to their home due to missed appointments?
-                'Case Manager', tot_visits_fac*(                                                  
-                          (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,   
-                                     120*customPar$qn[32]))*(               # Drug Dispensing Frequency
-                                         12*customPar$qn[24] +                   # <3 months
-                                         4*customPar$qn[25] +                    # 3-5 months     
-                                         2*customPar$qn[26]) +                   # 6 months or more    
-                          (15*customPar$qn[24]*(                          # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         0 +                                     # 3-5 months
-                                         0))) +                                  # 6 months or more
-                      tot_visits_com*(                                                  
-                          (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,            
-                                    120*customPar$qn[32]))*(              # Drug Dispensing Frequency
-                                        12*customPar$qn[24] +                    # <3 months
-                                        4*customPar$qn[25] +                     # 3-5 months
-                                        2*customPar$qn[26]) +                    # 6 months or more
-                      0),                            
-                'Clinical-Medical', tot_visits_fac*20*1*(0 +              # Clinical Consultations
-                                        12*customPar$qn[28] +                    # <3 months
-                                        4*customPar$qn[29] +                     # 3-5 months
-                                        2*customPar$qn[30]) +                    # 6 months or more
-                       tot_visits_com*20*1*(0 +                           # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         4*customPar$qn[29] +                    # 3-5 months
-                                         2*customPar$qn[30]),                    # 6 months or more
-                'Clinical-Nursing', tot_visits_fac*(                      
-                                      15*1*(                              # Drug Dispensing Frequency
-                                         12*customPar$qn[24] +                   # <3 months
-                                         4*customPar$qn[25] +                    # 3-5 months
-                                         2*customPar$qn[26]) +                   # 6 months or more
-                                      5*1*(                               # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         4*customPar$qn[29] +                    # 3-5 months
-                                         2*customPar$qn[30])) +                  # 6 months or more
-                                        (0 + 0),
-                'Data Clerk', tot_visits_fac*(                                                  
-                                      10*1*(                              # Drug Dispensing Frequency
-                                         12*customPar$qn[24] +                   # <3 months
-                                         4*customPar$qn[25] +                    # 3-5 months
-                                         2*customPar$qn[26]) +                   # 6 months or more
-                                      10*1*(                              # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         4*customPar$qn[29] +                    # 3-5 months
-                                         2*customPar$qn[30])) +                  # 6 months or more
-                              tot_visits_com*(                                                                                              
-                                      10*1*(                              # Drug Dispensing Frequency
-                                         12*customPar$qn[24] +                   # <3 months
-                                         4*customPar$qn[25] +                    # 3-5 months
-                                         2*customPar$qn[26]) +                   # 6 months or more
-                                      10*1*(                              # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         4*customPar$qn[29] +                    # 3-5 months
-                                         2*customPar$qn[30])),                   # 6 months or more
-                'Laboratory', tot_visits_fac*(0 + 
-                                      15*1*(                              # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         4*customPar$qn[29] +                    # 3-5 months
-                                         2*customPar$qn[30]) ) +                 # 6 months or more
-                              tot_visits_com*(0 + 
-                                      15*1*(                              # Clinical Consultations
-                                         12*customPar$qn[28] +                   # <3 months
-                                         4*customPar$qn[29] +                    # 3-5 months
-                                         2*customPar$qn[30])),                   # 6 months or more
-                'Lay-CHW', 
-                              tot_visits_fac*(
-                                ifelse(customPar$response[31]=='Lay-CHW', 120*customPar$qn[32], 0)*(# Drug Dispensing Frequency 
-                                         12*customPar$qn[24] +                   # <3 months 
-                                         4*customPar$qn[25] +                    # 3-5 months 
-                                         2*customPar$qn[26]) +                   # 6 months or more 
-                                 0) + 
-                              tot_visits_com*(
-                                ifelse(customPar$response[31]=='Lay-CHW', 120*customPar$qn[32], 0)*(# Drug Dispensing Frequency 
-                                        12*customPar$qn[24] +                    # <3 months 
-                                        4*customPar$qn[25] +                     # 3-5 months 
-                                        2*customPar$qn[26]) +                    # 6 months or more 
-                                    0),
-                'Lay-Counselor', tot_visits_fac*(                                                                                   
-                                   10*1*(                                   # Drug Dispensing Frequency
-                                        12*customPar$qn[24] +                   # <3 months
-                                        4*customPar$qn[25] +                    # 3-5 months
-                                        2*customPar$qn[26]) +                   # 6 months or more 
-                                    0) + 
-                                  tot_visits_com*(                                                                                     
-                                    10*1*(                                  # Drug Dispensing Frequency 
-                                        12*customPar$qn[24] +                   # <3 months
-                                        4*customPar$qn[25] +                    # 3-5 months
-                                        2*customPar$qn[26]) +                   # 6 months or more 
-                                      0),
-                'Pharmacy', tot_visits_fac*(                                                                                      
-                                    5*1*(                                   # Drug Dispensing Frequency  
-                                        12*customPar$qn[24] +                   # <3 months
-                                        4*customPar$qn[25] +                    # 3-5 months
-                                        2*customPar$qn[26]) +                   # 6 months or more 
-                                      0) + 
-                            tot_visits_com*(                                                                                            
-                                    5*1*(                                  # Drug Dispensing Frequency
-                                        12*customPar$qn[24] +                  # <3 months
-                                        4*customPar$qn[25] +                   # 3-5 months
-                                        2*customPar$qn[26]) +                  # 6 months or more 
-                                        0))
-              
-              TOT_MINS[[15]] <- data.frame(pathway='TX_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              # [16] PMTCT_ART_Already_on_life-long_ART_at_the_beginning_of_current_pregnancy 
-              # Total no. of minutes
-              tot_mins <- list( 
-                # qn[37] 28. Among PMTCT_ART Already on Life-long ART at the beginning of the current pregnancy, is the tracing 
-                #     of clients to their home due to missed appointments done primarily by a Lay-CHW or a Case Manager? 
-                # qn[38] 29. What percentage of PMTCT_ART Already on Life-long ART at the beginning of the current pregnancy 
-                #     seen at a facility are traced to their home due to missed appointments? 
-                # qn[39] 30. What percentage of PMTCT_ ART Already on Life-long ART at the beginning of the current pregnancy are 
-                #     unstable and have monthly visits to a facility (vs. those who are stable and have quarterly visits)? 
-                'Case Manager', (
-                                     30*1 + 
-                                     ifelse(customPar$response[37]=='Lay-CHW', 0, 
-                                                        120*customPar$qn[38]))*12*customPar$qn[39] +  # Unstable - Monthly
-                                     (30*1 + 
-                                      ifelse(customPar$response[37]=='Lay-CHW', 0, 
-                                                        120*customPar$qn[38]))*4*(1 - customPar$qn[39]), # Stable - Quarterly
-                'Clinical-Medical', 0,
-                'Clinical-Nursing',           25*1*12*customPar$qn[39] +  # Unstable - Monthly
-                                              25*1*4*(1 - customPar$qn[39]), # Stable - Quarterly
-                'Data Clerk',                 10*1*12*customPar$qn[39] +  # Unstable - Monthly
-                                              10*1*4*(1 - customPar$qn[39]), # Stable - Quarterly 
-                'Laboratory', 0,
-                'Lay-CHW',            ifelse(customPar$response[37]=='Lay-CHW', 120*customPar$qn[38], 
-                                                               0)*12*customPar$qn[39] + # Unstable - Monthly
-                                      ifelse(customPar$response[37]=='Lay-CHW', 120*customPar$qn[38], 
-                                                               0)*4*(1 - customPar$qn[39]), # Stable - Quarterly
-                'Lay-Counselor', 0,
-                'Pharmacy', 15*1)
-              
-              TOT_MINS[[16]] <- data.frame(pathway='PMTCT_ART_Already', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
-              
-              # [17] TX_CURR Key Population: Drug Dispensing Frequency & Clinical Consultations
-              # no of clients served
-              # qn[12] 12.  What percentage of TX_CURR: KP are seen at a facility (vs. community)?
-              clients_served_fac <- customPar$qn[12]        # facility
-              clients_served_com <- 1-customPar$qn[12]    # community
-              
-              # total no. of visits annually
-              tot_visits_fac <- clients_served_fac*1       # Facility
-              tot_visits_com <- clients_served_com*1       # community
-              
-              # Total no. of minutes
-              tot_mins <- list( 
-                # response[31] 25. Among TX_CURR, is the tracing of clients to their home due to missed appointments done primarily by a Lay-CHW or a Case Manager? 
-                # 29. What percentage of TX_CURR are traced to their home due to missed appointments?
-                # 23.  What percentage of TX_CURR are receiving drugs on the following schedules?
-                    # qn[24] <3 months
-                    # qn[25] 3-5 months
-                    # qn[26] 6 months or more
-                # 24.  What percentage of TX_CURR  have clinical consults at the following frequencies?
-                    # qn[28] <3 months, 
-                    # qn[29] 3-5 months, 
-                    # qn[30] 6 months or more
-                'Case Manager', tot_visits_fac*(                                                  
-                              (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,   # Drug Dispensing Frequency
-                                 120*customPar$qn[32]))*(12*customPar$qn[24] +            # <3 months
-                                                          4*customPar$qn[25] +            # 3-5 months     
-                                                          2*customPar$qn[26]) +           # 6 months or more    
-                                        (15*customPar$qn[24]*(                      # Clinical Consultations
-                                                       12*customPar$qn[28] +              # <3 months
-                                                       0 +                                # 3-5 months
-                                                       0))) +                             # 6 months or more
-                                tot_visits_com*(                                                  
-                                        (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,            
-                                                  120*customPar$qn[32]))*(          # Drug Dispensing Frequency
-                                                      12*customPar$qn[24] +               # <3 months
-                                                       4*customPar$qn[25] +               # 3-5 months
-                                                       2*customPar$qn[26]) +              # 6 months or more
-                                        0),                            
-                'Clinical-Medical', tot_visits_fac*20*1*(0 +                        # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30]) +               # 6 months or more
-                                    tot_visits_com*20*1*(0 +                        # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30]),                # 6 months or more
-                'Clinical-Nursing', tot_visits_fac*(                                # Drug Dispensing Frequency
-                                                    15*1*(
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more
-                                                                                                
-                                                    5*1*(                           # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30])) +              # 6 months or more
-                                                   (0 + 0),
-                'Data Clerk', tot_visits_fac*(                                                  
-                                                    10*1*(                          # Drug Dispensing Frequency
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more
-                                                    10*1*(                          # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30])) +              # 6 months or more
-                              tot_visits_com*(                                                                                              
-                                                    10*1*(                          # Drug Dispensing Frequency
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more
-                                                                                                
-                                                    10*1*(                          # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30])),               # 6 months or more
-                'Laboratory', tot_visits_fac*(0 + 
-                                                                                                
-                                                    15*1*(                          # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30]) ) +             # 6 months or more
-                              tot_visits_com*(0 + 
-                                                    15*1*(                          # Clinical Consultations
-                                                      12*customPar$qn[28] +               # <3 months
-                                                      4*customPar$qn[29] +                # 3-5 months
-                                                      2*customPar$qn[30])),               # 6 months or more
-                'Lay-CHW', 
+clientTime <- function(){
+  TOT_MINS <- list()
+            
+  ########### PREP
+  # [1] PREP_NEW Total population
+  # no of clients served
+  # 5. What percentage of people who start PrEP in the upcoming COP year will likely start PrEP in a 
+  #    health facility (vs. community)? 
+  clients_served_fac <- customPar$qn[5]        # facility
+  clients_served_com <- 1-customPar$qn[5]    # community
+  
+  # total no. of visits annually
+  tot_visits_fac <- clients_served_fac*1       # Facility
+  tot_visits_com <- clients_served_com*1       # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+    # 1. Are there case managers in place for follow-up of PrEP_NEW clients? 
+    'Case Manager', tot_visits_fac*(expect_screening_pctg*15 + ifelse(customPar$resp[1], 10*1, 0)) +
+                    tot_visits_com*(expect_screening_pctg*15 + ifelse(customPar$resp[1], 10*1, 0)),
+    'Clinical-Medical', tot_visits_fac*20*1 + 0,
+    'Clinical-Nursing', 0 + tot_visits_com*25*1,
+    'Data Clerk', tot_visits_fac*(10*1 + 10*1) + tot_visits_com*(10*1 + 10*1), 
+    'Laboratory', tot_visits_fac*20*1 + tot_visits_com*20*1,
+    'Lay-CHW', 0 + 0,
+    'Lay-Counselor', tot_visits_fac*expect_screening_pctg*20 + tot_visits_com*expect_screening_pctg*20,
+    'Pharmacy', tot_visits_fac*15*1 + 0)
+  
+  TOT_MINS[[1]] <- data.frame(pathway='PrEP_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+  
+  # [2] PrEP_CURR Total population 
+  # no of clients served
+  # 6. What percentage of people who start PrEP in the upcoming COP year will likely continue 
+  #    PrEP from a health facility (vs. community)?
+  # 7. What percentage of people who started PrEP in the current COP year will likely continue 
+  #    PrEP from a health facility (vs. community)?
+  clients_served_fac_start <- customPar$qn[6]        # starting PrEP served at facility
+  clients_served_com_start <- 1-customPar$qn[6]    # starting PrEP served at community
+  clients_served_fac_roll <- customPar$qn[7]          # rolling over PrEP served at facility
+  clients_served_com_roll <- 1-customPar$qn[7]      # rolling over PrEP served at community
+  
+  # adjusted no. of visits per client
+  # 15. How many continuation visits, on average, will clients who start PrEP in the planning COP 
+  #     year have in the planning COP year?
+  # 17. What percentage of clients who start PrEP in the planning COP year would you aim to be on PrEP at 
+  #     the end of the planning COP year?
+  # 16. How many continuation visits, on average, will clients who started PrEP in the year preceding the 
+  #     planning COP year have in the planning COP year?
+  # 18. What percentage of clients who started PrEP in the year preceding the planning COP year and continue 
+  #     PrEP into the planning COP year would you aim to be on PrEP at the end of the planning COP year? 
+  adj_visits_start <- customPar$qn[15]*customPar$qn[17]*0.5    #client starting PrEP
+  adj_visits_roll <- customPar$qn[16]*customPar$qn[18]     #client rolling over
+  
+  # total no. of visits annually
+  tot_visits_fac <- clients_served_fac_start*adj_visits_start + clients_served_fac_roll*adj_visits_roll # Facility
+  tot_visits_com <- clients_served_com_start*adj_visits_start + clients_served_com_roll*adj_visits_roll # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+    # 2. Are there case managers in place for follow-up of PrEP_CURR clients? 
+    # 13. What percentage of people who continue PrEP will have their PrEP delivered to their home? 
+    'Case Manager', tot_visits_fac*(ifelse(customPar$resp[2], 10*1, 0)*1 + 90*customPar$qn[13]) + 
+    tot_visits_com*(ifelse(customPar$resp[2], 10*1, 0)*1 + 90*customPar$qn[13]),
+    'Clinical-Medical', tot_visits_fac*10*1 + 0,
+    'Clinical-Nursing', 0 + tot_visits_com*25*1,
+    'Data Clerk', tot_visits_fac*10*1 + tot_visits_com*10*1, 
+    'Laboratory', tot_visits_fac*20*1 + tot_visits_com*20*1,
+    'Lay-CHW', 0 + 0,
+    'Lay-Counselor', tot_visits_fac*30*1 + tot_visits_com*30*1,
+    'Pharmacy', tot_visits_fac*15*1 + 0)
+  
+  TOT_MINS[[2]] <- data.frame(pathway='PrEP_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  
+  ########### HTS
+  # [3] HTS_SELF (Total)
+  # no of clients served
+  # 19. What percentage of HTS_SELF are unassisted (vs. assisted)?
+  clients_served_unass <- customPar$qn[19]        # unassisted
+  # 8. What percentage of assisted HTS_SELF are seen at a facility (vs. community)? 
+  clients_served_fac <- (1-customPar$qn[19])*customPar$qn[8]      # assisted facility
+  clients_served_com <- (1-customPar$qn[19])*(1-customPar$qn[8])    # assisted community
+  
+  # total no. of visits annually
+  tot_visits_unass <- clients_served_unass*1       # unassisted
+  tot_visits_fac <- clients_served_fac*1       # Facility
+  tot_visits_com <- clients_served_com*1       # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+    'Case Manager', 0 + 0 + 0,
+    'Clinical-Medical', 0 + 0 + 0,
+    'Clinical-Nursing', 0 + 0 + 0,
+    'Data Clerk', tot_visits_unass*10*1 + tot_visits_fac*(10*1 + 5*1) + tot_visits_com*(10*1 + 5*1), 
+    'Laboratory', 0 + 0 + 0,
+    # 20. What percentage of assisted HTS_SELF  are seen at a facility by a Lay-Counselor (vs. Lay-CHW)?
+    # 21. What percentage of unassisted HTS_SELF  are seen by a Lay-Counselor (vs. Lay-CHW):
+    'Lay-CHW', tot_visits_unass*2*(1 - customPar$qn[21]) +       # unassisted
+               tot_visits_fac*(10*(1 - customPar$qn[20]) + 10*0.05) +    # assisted facility
+               tot_visits_com*(20*1 + 15*0.05),    # assisted community
+    'Lay-Counselor', tot_visits_unass*2*customPar$qn[21] +  # unassisted
+               tot_visits_fac*(10*customPar$qn[20] + 10*0.05) + 0,      # assisted facility
+    'Pharmacy', 0 + 0 + 0)
+  
+  TOT_MINS[[3]] <- data.frame(pathway='HTS_SELF', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  
+  # [4] HTS_TST_Mobile
+  # Total no. of minutes
+  tot_mins <- list( 
+    'Case Manager', 0,
+    'Clinical-Medical', 0,
+    'Clinical-Nursing', 0,
+    'Data Clerk', 10*0.8, 
+    'Laboratory', 30*1, 
+    'Lay-CHW', 0, 
+    'Lay-Counselor', 55*1, 
+    'Pharmacy', 0)
+  
+  TOT_MINS[[4]] <- data.frame(pathway='HTS_TST_Mobile', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  
+  # Total no. of minutes
+  htsTime <- function(pathway) {
+    cm_deliver_test_time <- ifelse(pathway %in% c('HTS_TST_PMTCT_ANC1','HTS_TST_PMTCT_Post_ANC1','HTS_TST_Facility_Index'), 10, 0)
+    
+    tot_mins <- list( 
+      # 3.  Can Case Managers provide testing? 
+      'Case Manager', cm_deliver_test_time + ifelse(customPar$resp[3], 30*1, 0),
+      'Clinical-Medical', 0,
+      'Clinical-Nursing', 30*0.9,
+      'Data Clerk', 10*1, 
+      'Laboratory', 0 + 30*0.1,
+      'Lay-CHW', 0, 
+      'Lay-Counselor', 0,
+      'Pharmacy', 0)
+    
+    tot_mins <- data.frame(pathway=pathway, matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  }
+  
+  TOT_MINS[[5]] <- htsTime('HTS_TST_PMTCT_ANC1')          # [5] HTS_TST_PMTCT_ANC1
+  TOT_MINS[[6]] <- htsTime('HTS_TST_PMTCT_Post_ANC1')     # [6] HTS_TST_PMTCT_Post_ANC1
+  TOT_MINS[[7]] <- htsTime('HTS_TST_Facility_Index')      # [7] HTS_TST_Facility_Index
+  
+  TOT_MINS[[8]] <- htsTime('HTS_TST_STI')                 # [8] HTS_TST_STI 
+  TOT_MINS[[9]] <- htsTime('HTS_TST_Other_PITC')          # [9] HTS_TST_Other_PITC
+  TOT_MINS[[10]] <- htsTime('HTS_TST_Inpatient')          # [10] HTS_TST_Inpatient
+  
+  # [11] HTS_TST_IndexMod
+  # Total no. of minutes
+  tot_mins <- list( 
+    # 4.  Can Lay-Counselors provide testing? 
+    'Case Manager', 0,
+    'Clinical-Medical', ifelse(customPar$resp[4], 0, 60*0.9),
+    'Clinical-Nursing', ifelse(customPar$resp[4], 0, 60*0.05),
+    'Data Clerk', 10*1, 
+    'Laboratory', ifelse(customPar$resp[4], 0, 60*0.05),
+    'Lay-CHW', ifelse(customPar$resp[4], 0, 60*1), 
+    'Lay-Counselor', ifelse(customPar$resp[4], 125*1, 0),
+    'Pharmacy', 0)
+  
+  TOT_MINS[[11]] <- data.frame(pathway='HTS_TST_IndexMod', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  
+  ########### TX 
+  # [12] TX_NEW General Patients 
+  # no of clients served
+  # 9. What percentage of TX_NEW: general population are seen at a facility (vs. community)? 
+  clients_served_fac <- customPar$qn[9]        # facility
+  clients_served_com <- 1-customPar$qn[9]    # community
+  
+  # total no. of visits annually
+  tot_visits_fac <- clients_served_fac*1       # Facility
+  tot_visits_com <- clients_served_com*1       # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+    #resp[22] 22. Among TX_NEW seen at a facility, is initiation primarily nurse-led?   
+    'Case Manager', tot_visits_fac*(50*1) + tot_visits_com*(50*1),
+    'Clinical-Medical', tot_visits_fac*ifelse(customPar$resp[22], 0, 30*1) + tot_visits_com*40*1,
+    'Clinical-Nursing', tot_visits_fac*ifelse(customPar$resp[22], 60*1, 10*1 + 10*1) + 0,
+    'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
+    'Laboratory', tot_visits_fac*30*1 + tot_visits_com*30*1,
+    'Lay-CHW', 0 + 0,
+    'Lay-Counselor', 0 + 0,
+    'Pharmacy', tot_visits_fac*ifelse(customPar$resp[22], 0, 15*1) + tot_visits_com*15*1)
+  
+  TOT_MINS[[12]] <- data.frame(pathway='TX_NEW', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+  
+  # [13] TX_NEW_KP 
+  # no of clients served
+  # 10.  What percentage of TX_NEW: KP are seen at a facility (vs. community? 
+  clients_served_fac <- customPar$qn[10]        # facility
+  clients_served_com <- 1-customPar$qn[10]    # community
+  
+  # total no. of visits annually
+  tot_visits_fac <- clients_served_fac*1       # Facility
+  tot_visits_com <- clients_served_com*1       # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+    #resp[22] 22. Among TX_NEW seen at a facility, is initiation primarily nurse-led?   
+    'Case Manager', tot_visits_fac*(50*1) + tot_visits_com*(50*1),
+    'Clinical-Medical', tot_visits_fac*ifelse(customPar$resp[22], 0, 30*1) + tot_visits_com*40*1,
+    'Clinical-Nursing', tot_visits_fac*ifelse(customPar$resp[22], 60*1, 10*1 + 10*1) + 0,
+    'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
+    'Laboratory', tot_visits_fac*30*1 + tot_visits_com*30*1,
+    'Lay-CHW', 0 + 0,
+    'Lay-Counselor', 120*1.72,
+    'Pharmacy', tot_visits_fac*ifelse(customPar$resp[22], 0, 15*1) + tot_visits_com*15*1)
+  
+  TOT_MINS[[13]] <- data.frame(pathway='TX_NEW_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+  
+  # [14] PMTCT_ART_New_on_life-long_ART 
+  # Total no. of minutes
+  tot_mins <- list( 
+    'Case Manager', 40*1 + 30*1, 
+    'Clinical-Medical', 0,
+    'Clinical-Nursing', 30*1,
+    'Data Clerk', 25*1, 
+    'Laboratory', 30*1,
+    'Lay-CHW', 0,
+    'Lay-Counselor', 0,
+    'Pharmacy', 0)
+  
+  TOT_MINS[[14]] <- data.frame(pathway='PMTCT_ART_New', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  
+  # [15] TX_CURR General Patients: Drug Dispensing Frequency & Clinical Consultations
+  # no of clients served
+  # 11.  What percentage of TX_CURR: general population are seen at a facility (vs. community)? 
+  clients_served_fac <- customPar$qn[11]        # facility
+  clients_served_com <- 1-customPar$qn[11]    # community
+  
+  # total no. of visits annually
+  tot_visits_fac <- clients_served_fac*1       # Facility
+  tot_visits_com <- clients_served_com*1       # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+  # 23.  What percentage of TX_CURR are receiving drugs on the following schedules?
+      # qn[24]. <3 months
+      # qn[25]. 3-5 months
+      # qn[26]. 6 months or more
+    
+    # qn[31] 25. Among TX_CURR, is the tracing of clients to their home due to missed appointments done primarily 
+    #     by a Lay-CHW or a Case Manager? 
+    # qn[32] 26. What percentage of TX_CURR are traced to their home due to missed appointments?
+    'Case Manager', tot_visits_fac*(                                                  
+              (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,   
+                         120*customPar$qn[32]))*(               # Drug Dispensing Frequency
+                             12*customPar$qn[24] +                   # <3 months
+                             4*customPar$qn[25] +                    # 3-5 months     
+                             2*customPar$qn[26]) +                   # 6 months or more    
+              (15*customPar$qn[24]*(                          # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             0 +                                     # 3-5 months
+                             0))) +                                  # 6 months or more
+          tot_visits_com*(                                                  
+              (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,            
+                        120*customPar$qn[32]))*(              # Drug Dispensing Frequency
+                            12*customPar$qn[24] +                    # <3 months
+                            4*customPar$qn[25] +                     # 3-5 months
+                            2*customPar$qn[26]) +                    # 6 months or more
+          0),                            
+    'Clinical-Medical', tot_visits_fac*20*1*(0 +              # Clinical Consultations
+                            12*customPar$qn[28] +                    # <3 months
+                            4*customPar$qn[29] +                     # 3-5 months
+                            2*customPar$qn[30]) +                    # 6 months or more
+           tot_visits_com*20*1*(0 +                           # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             4*customPar$qn[29] +                    # 3-5 months
+                             2*customPar$qn[30]),                    # 6 months or more
+    'Clinical-Nursing', tot_visits_fac*(                      
+                          15*1*(                              # Drug Dispensing Frequency
+                             12*customPar$qn[24] +                   # <3 months
+                             4*customPar$qn[25] +                    # 3-5 months
+                             2*customPar$qn[26]) +                   # 6 months or more
+                          5*1*(                               # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             4*customPar$qn[29] +                    # 3-5 months
+                             2*customPar$qn[30])) +                  # 6 months or more
+                            (0 + 0),
+    'Data Clerk', tot_visits_fac*(                                                  
+                          10*1*(                              # Drug Dispensing Frequency
+                             12*customPar$qn[24] +                   # <3 months
+                             4*customPar$qn[25] +                    # 3-5 months
+                             2*customPar$qn[26]) +                   # 6 months or more
+                          10*1*(                              # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             4*customPar$qn[29] +                    # 3-5 months
+                             2*customPar$qn[30])) +                  # 6 months or more
+                  tot_visits_com*(                                                                                              
+                          10*1*(                              # Drug Dispensing Frequency
+                             12*customPar$qn[24] +                   # <3 months
+                             4*customPar$qn[25] +                    # 3-5 months
+                             2*customPar$qn[26]) +                   # 6 months or more
+                          10*1*(                              # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             4*customPar$qn[29] +                    # 3-5 months
+                             2*customPar$qn[30])),                   # 6 months or more
+    'Laboratory', tot_visits_fac*(0 + 
+                          15*1*(                              # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             4*customPar$qn[29] +                    # 3-5 months
+                             2*customPar$qn[30]) ) +                 # 6 months or more
+                  tot_visits_com*(0 + 
+                          15*1*(                              # Clinical Consultations
+                             12*customPar$qn[28] +                   # <3 months
+                             4*customPar$qn[29] +                    # 3-5 months
+                             2*customPar$qn[30])),                   # 6 months or more
+    'Lay-CHW', 
                   tot_visits_fac*(
                     ifelse(customPar$response[31]=='Lay-CHW', 120*customPar$qn[32], 0)*(# Drug Dispensing Frequency 
-                                                      12*customPar$qn[24] +               # <3 months 
-                                                      4*customPar$qn[25] +                # 3-5 months 
-                                                      2*customPar$qn[26]) +               # 6 months or more 
-                      0) + 
+                             12*customPar$qn[24] +                   # <3 months 
+                             4*customPar$qn[25] +                    # 3-5 months 
+                             2*customPar$qn[26]) +                   # 6 months or more 
+                     0) + 
                   tot_visits_com*(
                     ifelse(customPar$response[31]=='Lay-CHW', 120*customPar$qn[32], 0)*(# Drug Dispensing Frequency 
-                                                      12*customPar$qn[24] +               # <3 months 
-                                                      4*customPar$qn[25] +                # 3-5 months 
-                                                      2*customPar$qn[26]) +               # 6 months or more 
-                      0),
-                'Lay-Counselor', tot_visits_fac*(                                       # Drug Dispensing Frequency                                            
-                                                    10*1*(
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more 
-                                                0) + 
-                              tot_visits_com*(                                                                                     
-                                                    10*1*(                              # Drug Dispensing Frequency 
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more 
-                                            0),
-                'Pharmacy', tot_visits_fac*(                                                                                      
-                                                    5*1*(                              # Drug Dispensing Frequency  
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more 
-                                            0) + 
-                            tot_visits_com*(                                                                                            
-                                                    5*1*(                             # Drug Dispensing Frequency
-                                                      12*customPar$qn[24] +               # <3 months
-                                                      4*customPar$qn[25] +                # 3-5 months
-                                                      2*customPar$qn[26]) +               # 6 months or more 
-                                            0)
-                )
-              
-              TOT_MINS[[17]] <- data.frame(pathway='TX_CURR_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              # [18] TX_PVLS_Total 
-              # 27. What percentage of TX_PVLS are targeted for the following schedules?
-                      # qn[34] >2x/year, 
-                      # qn[35] 2x/year
-                      # qn[36] 1x/year
-              # Total no. of minutes
-              tot_mins <- list( 
-                'Case Manager', (10*1 + 10*1)*(4*customPar$qn[34] +   # >2x/year
-                                                      2*customPar$qn[35] +   # 2x/year
-                                                      1*customPar$qn[36]),   # 1x/year
-                'Clinical-Medical', (5*1 + 10*1)*(4*customPar$qn[34] +   # >2x/year
-                                                         2*customPar$qn[35] +   # 2x/year
-                                                         1*customPar$qn[36]),   # 1x/year
-                'Clinical-Nursing', 0,
-                'Data Clerk', 20*1*(4*customPar$qn[34] +   # >2x/year
-                                           2*customPar$qn[35] +   # 2x/year
-                                           1*customPar$qn[36]),   # 1x/year 
-                'Laboratory', 15*1*(4*customPar$qn[34] +   # >2x/year
-                                           2*customPar$qn[35] +   # 2x/year
-                                           1*customPar$qn[36]),   # 1x/year
-                'Lay-CHW', 0,
-                'Lay-Counselor', 0,
-                'Pharmacy', 0)
-              
-              TOT_MINS[[18]] <- data.frame(pathway='TX_PVLS', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
-              
-              TOT_MINS <- do.call(rbind, TOT_MINS)
-              names(TOT_MINS) <- c('pathway','cadre','tot_mins')
-              return(TOT_MINS)
-            })
+                            12*customPar$qn[24] +                    # <3 months 
+                            4*customPar$qn[25] +                     # 3-5 months 
+                            2*customPar$qn[26]) +                    # 6 months or more 
+                        0),
+    'Lay-Counselor', tot_visits_fac*(                                                                                   
+                       10*1*(                                   # Drug Dispensing Frequency
+                            12*customPar$qn[24] +                   # <3 months
+                            4*customPar$qn[25] +                    # 3-5 months
+                            2*customPar$qn[26]) +                   # 6 months or more 
+                        0) + 
+                      tot_visits_com*(                                                                                     
+                        10*1*(                                  # Drug Dispensing Frequency 
+                            12*customPar$qn[24] +                   # <3 months
+                            4*customPar$qn[25] +                    # 3-5 months
+                            2*customPar$qn[26]) +                   # 6 months or more 
+                          0),
+    'Pharmacy', tot_visits_fac*(                                                                                      
+                        5*1*(                                   # Drug Dispensing Frequency  
+                            12*customPar$qn[24] +                   # <3 months
+                            4*customPar$qn[25] +                    # 3-5 months
+                            2*customPar$qn[26]) +                   # 6 months or more 
+                          0) + 
+                tot_visits_com*(                                                                                            
+                        5*1*(                                  # Drug Dispensing Frequency
+                            12*customPar$qn[24] +                  # <3 months
+                            4*customPar$qn[25] +                   # 3-5 months
+                            2*customPar$qn[26]) +                  # 6 months or more 
+                            0))
+  
+  TOT_MINS[[15]] <- data.frame(pathway='TX_CURR', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+  
+  # [16] PMTCT_ART_Already_on_life-long_ART_at_the_beginning_of_current_pregnancy 
+  # Total no. of minutes
+  tot_mins <- list( 
+    # qn[37] 28. Among PMTCT_ART Already on Life-long ART at the beginning of the current pregnancy, is the tracing 
+    #     of clients to their home due to missed appointments done primarily by a Lay-CHW or a Case Manager? 
+    # qn[38] 29. What percentage of PMTCT_ART Already on Life-long ART at the beginning of the current pregnancy 
+    #     seen at a facility are traced to their home due to missed appointments? 
+    # qn[39] 30. What percentage of PMTCT_ ART Already on Life-long ART at the beginning of the current pregnancy are 
+    #     unstable and have monthly visits to a facility (vs. those who are stable and have quarterly visits)? 
+    'Case Manager', (
+                         30*1 + 
+                         ifelse(customPar$response[37]=='Lay-CHW', 0, 
+                                            120*customPar$qn[38]))*12*customPar$qn[39] +  # Unstable - Monthly
+                         (30*1 + 
+                          ifelse(customPar$response[37]=='Lay-CHW', 0, 
+                                            120*customPar$qn[38]))*4*(1 - customPar$qn[39]), # Stable - Quarterly
+    'Clinical-Medical', 0,
+    'Clinical-Nursing',           25*1*12*customPar$qn[39] +  # Unstable - Monthly
+                                  25*1*4*(1 - customPar$qn[39]), # Stable - Quarterly
+    'Data Clerk',                 10*1*12*customPar$qn[39] +  # Unstable - Monthly
+                                  10*1*4*(1 - customPar$qn[39]), # Stable - Quarterly 
+    'Laboratory', 0,
+    'Lay-CHW',            ifelse(customPar$response[37]=='Lay-CHW', 120*customPar$qn[38], 
+                                                   0)*12*customPar$qn[39] + # Unstable - Monthly
+                          ifelse(customPar$response[37]=='Lay-CHW', 120*customPar$qn[38], 
+                                                   0)*4*(1 - customPar$qn[39]), # Stable - Quarterly
+    'Lay-Counselor', 0,
+    'Pharmacy', 15*1)
+  
+  TOT_MINS[[16]] <- data.frame(pathway='PMTCT_ART_Already', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
+  
+  # [17] TX_CURR Key Population: Drug Dispensing Frequency & Clinical Consultations
+  # no of clients served
+  # qn[12] 12.  What percentage of TX_CURR: KP are seen at a facility (vs. community)?
+  clients_served_fac <- customPar$qn[12]        # facility
+  clients_served_com <- 1-customPar$qn[12]    # community
+  
+  # total no. of visits annually
+  tot_visits_fac <- clients_served_fac*1       # Facility
+  tot_visits_com <- clients_served_com*1       # community
+  
+  # Total no. of minutes
+  tot_mins <- list( 
+    # response[31] 25. Among TX_CURR, is the tracing of clients to their home due to missed appointments done primarily by a Lay-CHW or a Case Manager? 
+    # 29. What percentage of TX_CURR are traced to their home due to missed appointments?
+    # 23.  What percentage of TX_CURR are receiving drugs on the following schedules?
+        # qn[24] <3 months
+        # qn[25] 3-5 months
+        # qn[26] 6 months or more
+    # 24.  What percentage of TX_CURR  have clinical consults at the following frequencies?
+        # qn[28] <3 months, 
+        # qn[29] 3-5 months, 
+        # qn[30] 6 months or more
+    'Case Manager', tot_visits_fac*(                                                  
+                  (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,   # Drug Dispensing Frequency
+                     120*customPar$qn[32]))*(12*customPar$qn[24] +            # <3 months
+                                              4*customPar$qn[25] +            # 3-5 months     
+                                              2*customPar$qn[26]) +           # 6 months or more    
+                            (15*customPar$qn[24]*(                      # Clinical Consultations
+                                           12*customPar$qn[28] +              # <3 months
+                                           0 +                                # 3-5 months
+                                           0))) +                             # 6 months or more
+                    tot_visits_com*(                                                  
+                            (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,            
+                                      120*customPar$qn[32]))*(          # Drug Dispensing Frequency
+                                          12*customPar$qn[24] +               # <3 months
+                                           4*customPar$qn[25] +               # 3-5 months
+                                           2*customPar$qn[26]) +              # 6 months or more
+                            0),                            
+    'Clinical-Medical', tot_visits_fac*20*1*(0 +                        # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30]) +               # 6 months or more
+                        tot_visits_com*20*1*(0 +                        # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30]),                # 6 months or more
+    'Clinical-Nursing', tot_visits_fac*(                                # Drug Dispensing Frequency
+                                        15*1*(
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more
+                                                                                    
+                                        5*1*(                           # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30])) +              # 6 months or more
+                                       (0 + 0),
+    'Data Clerk', tot_visits_fac*(                                                  
+                                        10*1*(                          # Drug Dispensing Frequency
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more
+                                        10*1*(                          # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30])) +              # 6 months or more
+                  tot_visits_com*(                                                                                              
+                                        10*1*(                          # Drug Dispensing Frequency
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more
+                                                                                    
+                                        10*1*(                          # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30])),               # 6 months or more
+    'Laboratory', tot_visits_fac*(0 + 
+                                                                                    
+                                        15*1*(                          # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30]) ) +             # 6 months or more
+                  tot_visits_com*(0 + 
+                                        15*1*(                          # Clinical Consultations
+                                          12*customPar$qn[28] +               # <3 months
+                                          4*customPar$qn[29] +                # 3-5 months
+                                          2*customPar$qn[30])),               # 6 months or more
+    'Lay-CHW', 
+      tot_visits_fac*(
+        ifelse(customPar$response[31]=='Lay-CHW', 120*customPar$qn[32], 0)*(# Drug Dispensing Frequency 
+                                          12*customPar$qn[24] +               # <3 months 
+                                          4*customPar$qn[25] +                # 3-5 months 
+                                          2*customPar$qn[26]) +               # 6 months or more 
+          0) + 
+      tot_visits_com*(
+        ifelse(customPar$response[31]=='Lay-CHW', 120*customPar$qn[32], 0)*(# Drug Dispensing Frequency 
+                                          12*customPar$qn[24] +               # <3 months 
+                                          4*customPar$qn[25] +                # 3-5 months 
+                                          2*customPar$qn[26]) +               # 6 months or more 
+          0),
+    'Lay-Counselor', tot_visits_fac*(                                       # Drug Dispensing Frequency                                            
+                                        10*1*(
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more 
+                                    0) + 
+                  tot_visits_com*(                                                                                     
+                                        10*1*(                              # Drug Dispensing Frequency 
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more 
+                                0),
+    'Pharmacy', tot_visits_fac*(                                                                                      
+                                        5*1*(                              # Drug Dispensing Frequency  
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more 
+                                0) + 
+                tot_visits_com*(                                                                                            
+                                        5*1*(                             # Drug Dispensing Frequency
+                                          12*customPar$qn[24] +               # <3 months
+                                          4*customPar$qn[25] +                # 3-5 months
+                                          2*customPar$qn[26]) +               # 6 months or more 
+                                0)
+    )
+  
+  TOT_MINS[[17]] <- data.frame(pathway='TX_CURR_KP', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+  
+  # [18] TX_PVLS_Total 
+  # 27. What percentage of TX_PVLS are targeted for the following schedules?
+          # qn[34] >2x/year, 
+          # qn[35] 2x/year
+          # qn[36] 1x/year
+  # Total no. of minutes
+  tot_mins <- list( 
+    'Case Manager', (10*1 + 10*1)*(4*customPar$qn[34] +   # >2x/year
+                                          2*customPar$qn[35] +   # 2x/year
+                                          1*customPar$qn[36]),   # 1x/year
+    'Clinical-Medical', (5*1 + 10*1)*(4*customPar$qn[34] +   # >2x/year
+                                             2*customPar$qn[35] +   # 2x/year
+                                             1*customPar$qn[36]),   # 1x/year
+    'Clinical-Nursing', 0,
+    'Data Clerk', 20*1*(4*customPar$qn[34] +   # >2x/year
+                               2*customPar$qn[35] +   # 2x/year
+                               1*customPar$qn[36]),   # 1x/year 
+    'Laboratory', 15*1*(4*customPar$qn[34] +   # >2x/year
+                               2*customPar$qn[35] +   # 2x/year
+                               1*customPar$qn[36]),   # 1x/year
+    'Lay-CHW', 0,
+    'Lay-Counselor', 0,
+    'Pharmacy', 0)
+  
+  TOT_MINS[[18]] <- data.frame(pathway='TX_PVLS', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F) 
+  
+  TOT_MINS <- do.call(rbind, TOT_MINS)
+  names(TOT_MINS) <- c('pathway','cadre','tot_mins')
+  return(TOT_MINS)
+}
 
-client_time <- tot_mins %>% 
+client_time <- clientTime()
+client_time <- client_time %>% 
   mutate(target=gsub(".-\\s[A-Z]+$", '', pathway)) %>%  
-  group_by(PSNU,target,cadre) %>% 
+  group_by(target,cadre) %>% 
   summarise(tot_mins=sum(as.numeric(tot_mins))) %>% 
     ungroup()
 
@@ -722,62 +713,19 @@ tableRoutput <- function(hrh_data){
     slice(1) %>% 
     ungroup()
   
-  # prog_area_gap <- hrh_data %>%
-  #   filter(measure=='Gap') %>%
-  #   group_by(program_area) %>%
-  #   mutate(value=sum(value)) %>%   #sum up the Gap for cadres within the same program_area
-  #   slice(1) %>%
-  #   ungroup() %>%
-  #   select(-cadre)
-  
-  # prog_area_need_gap <- hrh_data %>%
-  #   filter(measure=='Gap' | measure=='Need') %>% 
-  #   group_by(program_area,measure) %>% 
-  #   mutate(value=sum(value)) %>%        #sum up the Gap, Need for cadres within the same program_area
-  #   slice(1) %>% 
-  #   ungroup() %>% 
-  #   select(-cadre) %>% 
-  #   spread(measure,value) %>% 
-  #   mutate(value=ifelse(Need>0, Gap*100/Need, 0),
-  #          measure="Gap %") %>% 
-  #   select(-Gap,-Need)
-  
-  # tot_prog_area_need_gap <- hrh_data %>%
-  #   filter(measure=='Gap' | measure=='Need') %>% 
-  #   group_by(measure) %>%
-  #   mutate(value=sum(value),
-  #          program_area='Total') %>% 
-  #   slice(1) %>% 
-  #   select(-cadre) %>% 
-  #   spread(measure,value) %>% 
-  #   mutate(value=ifelse(Need>0, Gap*100/Need, 0),
-  #          measure="Gap %") %>% 
-  #   select(-Gap,-Need)
-  
-  # tot_prog_area_gap <- prog_area_gap %>% 
-  #   mutate(value=sum(value),
-  #          program_area='Total') %>% 
-  #   slice(1)
-  
   # aggregate Gap, Need and Current hrh for all cadre by program area
   prog_area_need_gap <- hrh_data %>%
-    # filter(measure=='Gap' | measure=='Need') %>% 
     group_by(program_area,measure) %>% 
     mutate(value=sum(value),
            cadre='Total') %>%        
     slice(1) %>% 
     ungroup() %>% 
-    # select(-cadre) %>% 
     spread(measure,value) %>% 
-    # mutate(value=ifelse(Need>0, Gap*100/Need, 0),
     mutate(`Gap %`=ifelse(Need>0, Gap*100/Need, 0)) %>% 
     gather(measure,value,Current:`Gap %`)
-  # measure="Gap %") %>% 
-  # select(-Gap,-Need)
   
   # aggregate Gap, Need and Current hrh for all cadres and program areas
   tot_values <- prog_area_need_gap %>% 
-    # filter(measure!='Gap %') %>% 
     group_by(measure) %>% 
     mutate(value=sum(value),
            program_area='Total') %>%        
@@ -788,14 +736,9 @@ tableRoutput <- function(hrh_data){
   
   hrh_data <- full_join(total_hrh_data,hrh_data) %>% 
     filter(measure!='Gap') %>% 
-    # full_join(prog_area_gap) %>% 
-    # full_join(tot_prog_area_gap) %>% 
     full_join(prog_area_need_gap) %>%
     full_join(tot_values)
-    # full_join(tot_prog_area_need_gap)
 }
-
-# table_r <- tableRoutput(hrh)
 
 table_r <- ddply(scenarios, .(target_level), function(x){
   this_scenario <- full_join(hrh,x) %>% 
