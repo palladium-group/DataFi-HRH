@@ -2,27 +2,16 @@
    # Extract data from Excel based Data Collection Template
    # Transform the data appropriately and perform calculations
    # Output transformed data into prescribed csv format
-## Date modified: 27 October 2020
+## Date modified: 28 October 2020
 
-# Install packages if not available ----------------------------------------------------------------------
-PackagesList <- c("readxl","plyr","dplyr","tidyr")
-Packages <- PackagesList[!(PackagesList %in% installed.packages()[, "Package"])]
-if (length(Packages)) install.packages(Packages)
-
+# Load packages ----------------------------------------------------------------------
 library(readxl)
 library(plyr)
 library(dplyr)
 library(tidyr)
 
-# Set path variables ----------------------------------------------------------------------
-setwd('C:/Users/owner/Documents/palladium/HRH/DataFi-HRH/HRH-DataFiles')
-
 # Set Global Variables ---------------------------------------------------------------------- 
 BUDGET_SCENARIOS <- c(.8, .9, .95, 1.05, 1.1, 1.2) # factor by which to multiply current budget
-
-# Load the DCT ----------------------------------------------------------------------
-# dct <- "Data Collection Templates/2020 10 19 Data.FI HRH Solution Data Collection Template.USAID_Nigeria pilot.xlsx"
-dct <- "Data Collection Templates/2020 10 01 Data.FI HRH Solution Data Collection Template_TZ.lp.droppedQn22Qn24.xlsx"
 
 # Import Customization parameters ----------------------------------------------------------------------
 customPar <- read_excel(dct, sheet = "5. Customization Parameters", skip = 4, col_names = F)
@@ -57,7 +46,6 @@ expect_screening_pctg <- ifelse(tot_prep_new_target==0, 0,
 
 clientTime <- function(){
   TOT_MINS <- list()
-            
   ########### PREP
   # [1] PREP_NEW Total population
   # no of clients served
@@ -182,9 +170,11 @@ clientTime <- function(){
       # 3.  Can Case Managers provide testing? 
       'Case Manager', cm_deliver_test_time + ifelse(customPar$resp[3], 30*1, 0),
       'Clinical-Medical', 0,
-      'Clinical-Nursing', 30*0.9,
+      'Clinical-Nursing', ifelse(customPar$resp[3], 0, 30*0.9),
+      # 'Clinical-Nursing', 30*0.9,
       'Data Clerk', 10*1, 
-      'Laboratory', 0 + 30*0.1,
+      # 'Laboratory', 0 + 30*0.1,
+      'Laboratory', ifelse(customPar$resp[3], 0, 30*0.1),
       'Lay-CHW', 0, 
       'Lay-Counselor', 0,
       'Pharmacy', 0)
@@ -297,7 +287,7 @@ clientTime <- function(){
     
     # qn[31] 25. Among TX_CURR, is the tracing of clients to their home due to missed appointments done primarily 
     #     by a Lay-CHW or a Case Manager? 
-    # qn[32] 26. What percentage of TX_CURR are traced to their home due to missed appointments?
+    # qn[32] 29. What percentage of TX_CURR are traced to their home due to missed appointments?
     'Case Manager', tot_visits_fac*(                                                  
               (15*1 + ifelse(customPar$response[31]=='Lay-CHW', 0,   
                          120*customPar$qn[32]))*(               # Drug Dispensing Frequency
@@ -445,7 +435,7 @@ clientTime <- function(){
   # Total no. of minutes
   tot_mins <- list( 
     # response[31] 25. Among TX_CURR, is the tracing of clients to their home due to missed appointments done primarily by a Lay-CHW or a Case Manager? 
-    # 29. What percentage of TX_CURR are traced to their home due to missed appointments?
+    # qn[32] 29. What percentage of TX_CURR are traced to their home due to missed appointments?
     # 23.  What percentage of TX_CURR are receiving drugs on the following schedules?
         # qn[24] <3 months
         # qn[25] 3-5 months
@@ -612,12 +602,29 @@ awt$adjusted_ftes_mins <- apply(awt['cadre'], 1,
                                               'Lay-CHW' = 67872,
                                               'Laboratory' = 71688,
                                               'Pharmacy' = 71688))
+
+# Import Data Collection Home ----------------------------------------------------------------------
+dct_home <- read_excel(dct, sheet = "Data Collection Home", na = "0", skip = 3)
+dct_home <- as.data.frame(dct_home)
+completion_date <- as.Date(as.numeric(dct_home[8,2]), origin = "1899-12-30")
+ou <- dct_home[2,2]
+cop_planning_year <- dct_home[3,2]
+fy_target_scenario <- dct_home[4,2]
+
+dct_home <- data.frame(ou=ou) %>%
+  mutate(`Operating Unit`=ou,
+         `COP Planning Year`=cop_planning_year,
+         `Target Scenario`=fy_target_scenario,
+         `Completion Date`=completion_date,
+         `Run Date`=regmatches(Sys.time(), regexpr("[0-9-]+", Sys.time()))) %>% 
+  select(-ou)
+
 # Import PSNU list ----------------------------------------------------------------------
 psnu_list <- read_excel(dct, sheet = "1. PSNU List", skip = 2)
 psnu_list <- psnu_list %>% 
-  rename(`Target Scenario`=`FY Target Scenario`) %>% 
-  # select(-`Record ID`,-`DATIM UID`) %>% 
-  select(-`Record ID`) %>% 
+  # rename(`Target Scenario`=`FY Target Scenario`) %>% 
+  # select(-`Record ID`) %>% 
+  select(`DATIM UID`,PSNU) %>% 
   filter(!is.na(PSNU))
 
 # Import current salaries ----------------------------------------------------------------------
@@ -691,7 +698,8 @@ tableRoutput <- function(hrh_data){
   hrh_data <- calculateNeed(hrh_data)
   
   hrh_data <- hrh_data %>%
-    select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,current_hrh,PSNU,program_area,target,cadre,current_hrh,need) %>% 
+    # select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,current_hrh,PSNU,program_area,target,cadre,current_hrh,need) %>% 
+    select(current_hrh,PSNU,program_area,target,cadre,current_hrh,need) %>% 
     group_by(program_area,PSNU,cadre) %>% 
     mutate(Need=sum(need)) %>%   #sum up the need for indicators within the same (program_area,PSNU,cadre)
     slice(1) %>% 
@@ -752,14 +760,22 @@ table_r <- ddply(scenarios, .(target_level), function(x){
   
   this_scenario$measure[this_scenario$measure=='Need'] <- 'Total Estimated Need'
   this_scenario$measure[this_scenario$measure=='Current'] <- 'Current Staffing'
-  
+  # 
+  # this_scenario <- this_scenario %>% 
+  #   mutate(`Program Area`=program_area,
+  #          CurrentAndNeed=measure,
+  #          Cadre=cadre,
+  #          Value=value) %>% 
+  #   arrange(program_area,measure,cadre) %>% 
+  #   select(`Operating Unit`,`COP Planning Year`,`Target Scenario`, PrEP_Target,	HTS_Target,	TX_Target, `Program Area`,CurrentAndNeed,Cadre,Value,
+  #          `Completion Date`,`Run Date`)  
   this_scenario <- this_scenario %>% 
     mutate(`Program Area`=program_area,
            CurrentAndNeed=measure,
            Cadre=cadre,
            Value=value) %>% 
     arrange(program_area,measure,cadre) %>% 
-    select(`Operating Unit`,`COP Planning Year`,`Target Scenario`, PrEP_Target,	HTS_Target,	TX_Target, `Program Area`,CurrentAndNeed,Cadre,Value)
+    select(PrEP_Target,	HTS_Target,	TX_Target, `Program Area`,CurrentAndNeed,Cadre,Value)
 })
 
 table_r <- table_r %>% select(-target_level)
@@ -773,14 +789,16 @@ table_r <- table_r %>%
 filter(!grepl('Gap', CurrentAndNeed)) %>% 
   full_join(table_g)
 
+table_r <- cbind(dct_home,table_r)
+
 # Set the output folder ----------------------------------------------------------------------
 # create folder with name based on: OU, COP planning year and Target scenario
 output_dir <- paste(table_r$`Operating Unit`[1], '_', table_r$`COP Planning Year`[1], '_', table_r$`Target Scenario`[1], sep='')
-out_folder <- paste('Output Files/', output_dir, sep='')
+out_folder <- paste('Dataout/', output_dir, sep='')
 
 # archived files from the active output folder 
 if (file.exists(out_folder)) {
-  arch_dir <- paste('Output Files/Archive/', output_dir, '_', gsub(':', '-', Sys.time()), sep='')
+  arch_dir <- paste('Dataout/Archive/', output_dir, '_', gsub(':', '-', Sys.time()), sep='')
   dir.create(arch_dir)
   
   out_files <- list.files(out_folder)
@@ -801,12 +819,14 @@ table_l <- current_hrh %>%
   slice(1) %>% 
   ungroup() %>% 
   full_join(current_hrh) %>% 
-  full_join(psnu_list) %>% 
+  full_join(psnu_list) %>%
   mutate(`Cost (USD)`=current_hrh*current_salaries) %>% 
   rename(Cadre=cadre,
          `Program Area`=program_area,
          `Current staff (FTEs)`=current_hrh) %>% 
-  select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,`PSNU`,`Program Area`,`Cadre`,`Current staff (FTEs)`,`Cost (USD)`)
+  select(PSNU,`DATIM UID`,`Program Area`,`Cadre`,`Current staff (FTEs)`,`Cost (USD)`)  
+  # select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,`PSNU`,`Program Area`,`Cadre`,`Current staff (FTEs)`,`Cost (USD)`)
+table_l <- cbind(dct_home,table_l)
 
 write.csv(table_l, paste(out_folder, '/Dashboard1_CurrentStaff&Costs.csv', sep=''), row.names = F)
 
@@ -834,19 +854,19 @@ table_c <- program_targets %>%
   full_join(current_hrh_out) %>% 
   mutate(`Current Staff`=current_hrh,
          `Program Area`=program_area) %>% 
-  select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,PSNU,`DATIM UID`,`Program Area`,`Target Type`,Target,`Current Staff`)
+  select(PSNU,`DATIM UID`,`DATIM UID`,`Program Area`,`Target Type`,Target,`Current Staff`)
+  # select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,PSNU,`DATIM UID`,`Program Area`,`Target Type`,Target,`Current Staff`)
   # select(`Operating Unit`,`COP Planning Year`,`Target Scenario`,PSNU,`PrEP: TOTAL (current staff)`,`HTS: TOTAL (current staff)`,`TX: TOTAL (current staff)`,
   #        `PrEP_NEW (target)`,`PrEP_CURR (target)`,`HTS_SELF (target)`,`HTS_TST (target)`,`TX_NEW (target)`,
   #        `TX_CURR (target)`,`TX_PVLS (target)`)
+
+table_c <- cbind(dct_home,table_c)
 
 write.csv(table_c, paste(out_folder, '/Dashboard2_CurrentStaff&Targets.csv', sep=''), row.names = F)
 
 # Output Dashboard3_StaffingNeed ----------------------------------------------------------------------
 # write.csv(table_r, paste(out_folder, '_Dashboard3_StaffingNeed_', gsub(':', '-', Sys.time()), '.csv', sep=''), row.names = F)
 write.csv(table_r, paste(out_folder, '/Dashboard3_StaffingNeed.csv', sep=''), row.names = F)
-
-# # G-gap
-# write.csv(table_g, paste('Output Files/Dashboard3_StaffingGap_', gsub(':', '-', Sys.time()), '.csv', sep=''), row.names = F)
 
 # output for PRI calculations
 scenarios_mini <- data.frame(PrEP_Target=unique(PrEP_Target), HTS_Target=unique(HTS_Target),	TX_Target=unique(TX_Target), stringsAsFactors = F)
@@ -863,6 +883,7 @@ hrh_inputs <- ddply(scenarios_mini, .(target_level), function(x){
 })
 
 hrh_inputs <- hrh_inputs %>% 
+  mutate(`Target Scenario`=fy_target_scenario) %>% 
   group_by(PSNU,program_area,current_hrh,cadre,`Target Scenario`,current_salaries,target_level) %>% 
   summarise(
   # current_hrh=sum(current_hrh),
@@ -917,6 +938,8 @@ for (i in 1:length(PSNU)){
         # Get subset from HRH_Inputs
         dat <- hrh_inputs %>% filter(psnu == PSNU[i] & program_area == PROGRAM_AREAS[j] &
                                        cadre == CADRES[k] & target_level == TARGET_LEVELS[l])
+        if(floor(dat$need) == 0) {next}
+        
         # Get need
         need <- dat$need
         # Get supply
@@ -1229,6 +1252,7 @@ attribution_red_clean <- attribution_red_totals %>%
 
 attribution_all <- merge(attribution_current_clean, attribution_red_clean, 
                          by = c("PrEP_target_level", "HTS_target_level", "TX_target_level"))
+attribution_all <- cbind(dct_home,attribution_all)
 
 write.csv(attribution_all, paste(out_folder, "./Dashboard4_Attribution.csv", sep=''), row.names = F)
 
@@ -1255,6 +1279,7 @@ current_vs_redistributed[is.na(current_vs_redistributed)] <- 0
 # drop unused columns
 dashboard5 <- current_vs_redistributed %>%
   select(psnu, program_area, target_level, cadre, staff_redistributed, current_hrh)
+dashboard5 <- cbind(dct_home,dashboard5)
 
 # #save out in wide format
 write.csv(dashboard5, paste(out_folder, "./Dashboard5_RedistributionProfiles.csv", sep=''), row.names = F)
@@ -1272,6 +1297,7 @@ dashboard6 <- merge(current_vs_redistributed, optimal_cop,
                     all.x = T)
 
 dashboard6[is.na(dashboard6)] <- 0
+dashboard6 <- cbind(dct_home,dashboard6)
 
 write.csv(dashboard6, paste(out_folder, "./Dashboard6_OptimalAllocation.csv", sep=''), row.names = F)
 
@@ -1402,6 +1428,7 @@ brc_amounts <- merge(brc_long, adjusted_budgets, by = c("program_area", "budget_
 
 # In case a program area has no budget, like PrEP in Tanzania, set NAs to zero
 brc_amounts[is.na(brc_amounts)] <- 0
+brc_amounts <- cbind(dct_home,brc_amounts)
 
 # save out in long format
 write.csv(brc_amounts, paste(out_folder, '/Dashboard7_AdjustedFunding.csv', sep=''), row.names = F)
@@ -1419,6 +1446,7 @@ surplus <- hrh_inputs %>%
   summarize(total_surplus = sum(surplus),
             total_surplus_cost = sum(surplus_cost),
             .groups = "drop")
+surplus <- cbind(dct_home,surplus)
 
 # save out 
 write.csv(surplus, paste(out_folder, "./SurplusStaff.csv", sep=''), row.names = F)
