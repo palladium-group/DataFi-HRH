@@ -2,7 +2,12 @@
    # Extract data from Excel based Data Collection Template
    # Transform the data appropriately and perform calculations
    # Output transformed data into prescribed csv format
-## Date modified: 28 October 2020
+## Date modified: 30 October 2020
+
+# Install packages 
+PackagesList <- c("readxl","plyr","dplyr","tidyr")
+Packages <- PackagesList[!(PackagesList %in% installed.packages()[, "Package"])]
+if (length(Packages)) install.packages(Packages)
 
 # Load packages ----------------------------------------------------------------------
 library(readxl)
@@ -222,7 +227,8 @@ clientTime <- function(){
     'Case Manager', tot_visits_fac*(50*1) + tot_visits_com*(50*1),
     'Clinical-Medical', tot_visits_fac*ifelse(customPar$resp[22], 0, 30*1) + tot_visits_com*40*1,
     'Clinical-Nursing', tot_visits_fac*ifelse(customPar$resp[22], 60*1, 10*1 + 10*1) + 0,
-    'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
+    'Data Clerk', tot_visits_fac*(10*1 + 10*1) + tot_visits_com*(10*1 + 15*1),
+    # 'Data Clerk', tot_visits_fac*(10*1 + 15*1) + tot_visits_com*(10*1 + 15*1), 
     'Laboratory', tot_visits_fac*30*1 + tot_visits_com*30*1,
     'Lay-CHW', 0 + 0,
     'Lay-Counselor', 0 + 0,
@@ -264,7 +270,7 @@ clientTime <- function(){
     'Laboratory', 30*1,
     'Lay-CHW', 0,
     'Lay-Counselor', 0,
-    'Pharmacy', 0)
+    'Pharmacy', 15*1)
   
   TOT_MINS[[14]] <- data.frame(pathway='PMTCT_ART_New', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
   
@@ -418,7 +424,8 @@ clientTime <- function(){
                           ifelse(customPar$response[37]=='Lay-CHW', 120*customPar$qn[38], 
                                                    0)*4*(1 - customPar$qn[39]), # Stable - Quarterly
     'Lay-Counselor', 0,
-    'Pharmacy', 15*1)
+    'Pharmacy', 15*1*12*customPar$qn[39] +  # Unstable - Monthly
+                15*1*4*(1 - customPar$qn[39])) # Stable - Quarterly
   
   TOT_MINS[[16]] <- data.frame(pathway='PMTCT_ART_Already', matrix(unlist(tot_mins), ncol=2,byrow=T), stringsAsFactors = F)
   
@@ -564,7 +571,8 @@ clientTime <- function(){
                                              2*customPar$qn[35] +   # 2x/year
                                              1*customPar$qn[36]),   # 1x/year
     'Clinical-Nursing', 0,
-    'Data Clerk', 20*1*(4*customPar$qn[34] +   # >2x/year
+    # 'Data Clerk', 20*1*(4*customPar$qn[34] +   # >2x/year
+    'Data Clerk', 10*1*(4*customPar$qn[34] +   # >2x/year
                                2*customPar$qn[35] +   # 2x/year
                                1*customPar$qn[36]),   # 1x/year 
     'Laboratory', 15*1*(4*customPar$qn[34] +   # >2x/year
@@ -885,13 +893,11 @@ hrh_inputs <- ddply(scenarios_mini, .(target_level), function(x){
 hrh_inputs <- hrh_inputs %>% 
   mutate(`Target Scenario`=fy_target_scenario) %>% 
   group_by(PSNU,program_area,current_hrh,cadre,`Target Scenario`,current_salaries,target_level) %>% 
-  summarise(
-  # current_hrh=sum(current_hrh),
-            need=sum(need)) %>% 
+  summarise(need=sum(need)) %>% 
   ungroup()
 
-# saveRDS(hrh_inputs, file='Output Files/hrh_out_pri.RData')
-# hrh_inputs <- readRDS('Output Files/hrh_out_pri.RData') 
+# saveRDS(hrh_inputs, file='Dataout/hrh_out_pri.RData')
+# hrh_inputs <- readRDS('Dataout/hrh_out_pri.RData') 
 
 
 # PRI calculations -------------------------------------------------------------------
@@ -1430,6 +1436,12 @@ brc_amounts <- merge(brc_long, adjusted_budgets, by = c("program_area", "budget_
 brc_amounts[is.na(brc_amounts)] <- 0
 brc_amounts <- cbind(dct_home,brc_amounts)
 
+# identify if value contains decimal
+brc_amounts <- brc_amounts %>%
+  mutate(dec = ifelse(redistributed_budget_scenario %% 1 != 0, 1, 0)) %>%
+  arrange(desc(dec)) %>%
+  select(-dec)
+
 # save out in long format
 write.csv(brc_amounts, paste(out_folder, '/Dashboard7_AdjustedFunding.csv', sep=''), row.names = F)
 
@@ -1450,3 +1462,13 @@ surplus <- cbind(dct_home,surplus)
 
 # save out 
 write.csv(surplus, paste(out_folder, "./SurplusStaff.csv", sep=''), row.names = F)
+
+# Create a copy of the current output files in the root output folder
+out_files <- list.files(out_folder)
+for (out_file in out_files) {
+  data_out_file <- paste('Dataout/', out_file, sep='')
+  
+  if (file.exists(data_out_file)) {file.remove(data_out_file)}
+  
+  file.copy(paste(out_folder, '/', out_file, sep=''), data_out_file)
+}
