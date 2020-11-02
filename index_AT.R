@@ -1319,7 +1319,8 @@ red_cop <- redistributed_summary %>% filter(target_level == "COP") %>% select(-t
 # Let's join the redistributed hires and PRI list
 optimal_red <- merge(optimal_cop, red_cop,
                      by = c("psnu", "program_area", "cadre"),
-                     all.x = T)
+                     all = T)
+                     # all.x = T)
 
 # If no redistributed staff, then appears as NA - set to zero
 optimal_red[is.na(optimal_red)] <- 0
@@ -1430,7 +1431,14 @@ adjusted_budgets <- budget_hires_out %>%
   group_by(program_area, budget_scenario) %>%
   summarize(budget_amount = mean(budget_amount), .groups = "drop")
 
-brc_amounts <- merge(brc_long, adjusted_budgets, by = c("program_area", "budget_scenario"), all.x = TRUE)
+budget <- budget %>%
+  rename("budget_amount" = pa_budget) %>%
+  mutate(budget_scenario = "current funding level")
+
+budget_all <- rbind(budget, adjusted_budgets)
+
+brc_amounts <- merge(brc_long, budget_all, by = c("program_area", "budget_scenario"), all.x = TRUE)
+# brc_amounts <- merge(brc_long, adjusted_budgets, by = c("program_area", "budget_scenario"), all.x = TRUE)
 
 # In case a program area has no budget, like PrEP in Tanzania, set NAs to zero
 brc_amounts[is.na(brc_amounts)] <- 0
