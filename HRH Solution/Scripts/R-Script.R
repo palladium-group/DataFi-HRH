@@ -2,7 +2,7 @@
    # Extract data from Excel based Data Collection Template
    # Transform the data appropriately and perform calculations
    # Output transformed data into prescribed csv format
-## Date modified: 07 December 2020
+## Date modified: 09 December 2020
 
 # Install packages 
 PackagesList <- c("readxl","writexl","plyr","dplyr","tidyr")
@@ -31,6 +31,11 @@ customPar$resp <- ifelse(customPar$response %in% c('Yes','No'), customPar$respon
 
 # Import Program targets ----------------------------------------------------------------------
 program_targets <- read_excel(dct, sheet = "2. Program Targets ", skip = 3)
+
+program_targets <- as.data.frame(program_targets) %>%
+  filter(!is.na(PSNU),
+         PSNU!="0") # filter out entirely empty rows that come with the excel sheet
+  
 program_targets_out <- program_targets %>% 
   select(-`Ref ID`)
 
@@ -39,10 +44,8 @@ names(program_targets) <- gsub("\\s\\(", '_', gsub("\\)", '', names(program_targ
 names(program_targets) <- gsub("\\s+", '_', names(program_targets))
 names(program_targets) <- gsub("__", '_', names(program_targets))
 
-program_targets <- as.data.frame(program_targets) %>%
-  filter(!is.na(PSNU),
-         PSNU!="0") %>% # filter out entirely empty rows that come with the excel sheet
-  select(-DATIM_UID,-Ref_ID)
+program_targets <- program_targets %>% 
+select(-DATIM_UID,-Ref_ID)
 
 names(program_targets)[grepl('PMTCT_ART_New', names(program_targets))] <- 'PMTCT_ART_New'
 names(program_targets)[grepl('PMTCT_ART_Already', names(program_targets))] <- 'PMTCT_ART_Already'
@@ -942,6 +945,11 @@ custom_pars <- cbind(dct_home,custom_pars)
 write_xlsx(custom_pars, paste(out_folder, '/CustomizationParameters.xlsx', sep=''))
 
 # output program targets
+mini_dct_home <- dct_home %>% 
+  select(`Operating Unit`,`COP Planning Year`,`Target Scenario`)
+
+program_targets_out <- cbind(mini_dct_home,program_targets_out)
+
 names(program_targets_out) <- gsub('_Total', ' (Total)', names(program_targets_out))
 names(program_targets_out) <- gsub('\\s+', ' ', names(program_targets_out))
 names(program_targets_out)[grepl("PMTCT_ART \\(Already", names(program_targets_out))] <- 'PMTCT_ART (Already on life-long ART)'
